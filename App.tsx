@@ -2,8 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { AppScreen, UserRole, UserProfile } from './types';
 import WelcomeScreen from './screens/WelcomeScreen';
+import SignUpScreen from './screens/SignUpScreen';
+import LoginScreen from './screens/LoginScreen';
 import RoleSelectionScreen from './screens/RoleSelectionScreen';
 import RequestRideScreen from './screens/RequestRideScreen';
+import DriverMainScreen from './screens/DriverMainScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import { IMAGES } from './constants';
 
@@ -26,14 +29,26 @@ const App: React.FC = () => {
     setCurrentScreen(screen);
   };
 
-  const handleLogin = () => {
+  const handleCreateAccount = () => {
+    navigateTo(AppScreen.SIGN_UP);
+  };
+
+  const handleGoToLogin = () => {
+    navigateTo(AppScreen.LOGIN);
+  };
+
+  const handleAuthComplete = () => {
     setIsLoggedIn(true);
     navigateTo(AppScreen.ROLE_SELECTION);
   };
 
   const handleRoleSelect = (role: UserRole) => {
     setUserRole(role);
-    navigateTo(AppScreen.MAIN_REQUEST);
+    if (role === UserRole.DRIVER) {
+      navigateTo(AppScreen.DRIVER_DASHBOARD);
+    } else {
+      navigateTo(AppScreen.MAIN_REQUEST);
+    }
   };
 
   const handleLogout = () => {
@@ -45,22 +60,44 @@ const App: React.FC = () => {
   const renderScreen = () => {
     switch (currentScreen) {
       case AppScreen.WELCOME:
-        return <WelcomeScreen onCreateAccount={handleLogin} onLogin={handleLogin} />;
+        return <WelcomeScreen onCreateAccount={handleCreateAccount} onLogin={handleGoToLogin} />;
+      case AppScreen.SIGN_UP:
+        return <SignUpScreen onSignUp={handleAuthComplete} onBack={() => navigateTo(AppScreen.WELCOME)} onGoToLogin={handleGoToLogin} />;
+      case AppScreen.LOGIN:
+        return <LoginScreen onLogin={handleAuthComplete} onBack={() => navigateTo(AppScreen.WELCOME)} onGoToSignUp={handleCreateAccount} />;
       case AppScreen.ROLE_SELECTION:
-        return <RoleSelectionScreen onSelectRole={handleRoleSelect} onBack={() => navigateTo(AppScreen.WELCOME)} />;
+        return <RoleSelectionScreen onSelectRole={handleRoleSelect} onBack={() => navigateTo(AppScreen.WELCOME)} onGoToLogin={handleGoToLogin} />;
       case AppScreen.MAIN_REQUEST:
-        return <RequestRideScreen onOpenProfile={() => navigateTo(AppScreen.PROFILE)} />;
+        return (
+          <RequestRideScreen 
+            onOpenProfile={() => navigateTo(AppScreen.PROFILE)} 
+            onBack={() => navigateTo(AppScreen.ROLE_SELECTION)}
+          />
+        );
+      case AppScreen.DRIVER_DASHBOARD:
+        return (
+          <DriverMainScreen 
+            onOpenProfile={() => navigateTo(AppScreen.PROFILE)} 
+            onBack={() => navigateTo(AppScreen.ROLE_SELECTION)}
+          />
+        );
       case AppScreen.PROFILE:
         return (
           <ProfileScreen 
             user={MOCK_USER} 
             initialRole={userRole} 
-            onBack={() => navigateTo(AppScreen.MAIN_REQUEST)} 
+            onBack={() => {
+              if (userRole === UserRole.DRIVER) {
+                navigateTo(AppScreen.DRIVER_DASHBOARD);
+              } else {
+                navigateTo(AppScreen.MAIN_REQUEST);
+              }
+            }} 
             onLogout={handleLogout}
           />
         );
       default:
-        return <WelcomeScreen onCreateAccount={handleLogin} onLogin={handleLogin} />;
+        return <WelcomeScreen onCreateAccount={handleCreateAccount} onLogin={handleGoToLogin} />;
     }
   };
 

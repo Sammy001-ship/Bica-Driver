@@ -4,10 +4,25 @@ import { IMAGES } from '../constants';
 
 interface RequestRideScreenProps {
   onOpenProfile: () => void;
+  onBack: () => void;
 }
 
-const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile }) => {
+const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, onBack }) => {
   const [rideType, setRideType] = useState<'now' | 'schedule'>('now');
+  const [isSearching, setIsSearching] = useState(false);
+
+  const handleFindDriver = () => {
+    setIsSearching(true);
+    // Simulate a search delay
+    setTimeout(() => {
+      setIsSearching(false);
+      alert("Search initiated! Looking for the nearest available driver.");
+    }, 2000);
+  };
+
+  const handleFeatureComingSoon = (feature: string) => {
+    alert(`${feature} feature coming soon!`);
+  };
 
   return (
     <div className="h-screen w-full overflow-hidden flex flex-col relative bg-background-dark">
@@ -34,13 +49,16 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile }) 
 
       {/* Top Navigation */}
       <div className="relative z-10 flex items-center justify-between p-4 pt-8 pb-4 bg-gradient-to-b from-background-dark/90 to-transparent">
-        <button className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg hover:bg-surface-dark transition-colors">
+        <button 
+          onClick={onBack}
+          className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg hover:bg-surface-dark transition-colors active:scale-95"
+        >
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <h2 className="text-white text-lg font-bold tracking-tight drop-shadow-md">Request a Driver</h2>
         <button 
           onClick={onOpenProfile}
-          className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg hover:bg-surface-dark transition-colors"
+          className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg hover:bg-surface-dark transition-colors active:scale-95"
         >
           <span className="material-symbols-outlined">person</span>
         </button>
@@ -61,7 +79,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile }) 
               onClick={() => setRideType('now')}
               className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-200 ${
                 rideType === 'now' ? 'bg-primary text-white shadow-md' : 'text-slate-400'
-              }`}
+              } active:scale-[0.98]`}
             >
               Ride Now
             </button>
@@ -69,7 +87,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile }) 
               onClick={() => setRideType('schedule')}
               className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-200 ${
                 rideType === 'schedule' ? 'bg-primary text-white shadow-md' : 'text-slate-400'
-              }`}
+              } active:scale-[0.98]`}
             >
               Schedule Later
             </button>
@@ -93,7 +111,9 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile }) 
                     type="text" 
                     defaultValue="Current Location"
                   />
-                  <span className="material-symbols-outlined text-primary text-[20px] ml-2">my_location</span>
+                  <button onClick={() => handleFeatureComingSoon("GPS Detection")} className="active:scale-90">
+                    <span className="material-symbols-outlined text-primary text-[20px] ml-2">my_location</span>
+                  </button>
                 </div>
               </div>
 
@@ -131,20 +151,36 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile }) 
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Estimated Price</span>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-bold text-white">$15.00</span>
-                  <span className="text-sm font-medium text-slate-400">- $20.00</span>
+                  <span className="text-2xl font-bold text-white">₦15,000</span>
+                  <span className="text-sm font-medium text-slate-400">- ₦20,000</span>
                 </div>
               </div>
-              <div className="flex items-center gap-2 bg-input-dark px-3 py-1.5 rounded-lg border border-slate-700/50 cursor-pointer hover:bg-slate-700/50">
+              <div 
+                onClick={() => handleFeatureComingSoon("Payment Selection")}
+                className="flex items-center gap-2 bg-input-dark px-3 py-1.5 rounded-lg border border-slate-700/50 cursor-pointer hover:bg-slate-700/50 active:scale-95 transition-transform"
+              >
                 <span className="material-symbols-outlined text-slate-400 text-[16px]">credit_card</span>
                 <span className="text-xs font-semibold text-slate-300">Personal • 4288</span>
                 <span className="material-symbols-outlined text-slate-500 text-[16px]">keyboard_arrow_down</span>
               </div>
             </div>
             
-            <button className="w-full bg-primary hover:bg-blue-600 active:bg-blue-700 text-white font-bold text-lg py-4 rounded-xl shadow-lg shadow-primary/25 flex items-center justify-center gap-2 transition-all transform active:scale-[0.98]">
-              <span>Find a Driver</span>
-              <span className="material-symbols-outlined">arrow_forward</span>
+            <button 
+              onClick={handleFindDriver}
+              disabled={isSearching}
+              className={`w-full ${isSearching ? 'bg-slate-600' : 'bg-primary hover:bg-blue-600 active:bg-blue-700'} text-white font-bold text-lg py-4 rounded-xl shadow-lg shadow-primary/25 flex items-center justify-center gap-2 transition-all transform active:scale-[0.98]`}
+            >
+              {isSearching ? (
+                <>
+                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  <span>Searching...</span>
+                </>
+              ) : (
+                <>
+                  <span>Find a Driver</span>
+                  <span className="material-symbols-outlined">arrow_forward</span>
+                </>
+              )}
             </button>
           </div>
         </div>

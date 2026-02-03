@@ -13,6 +13,10 @@ interface ProfileScreenProps {
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack, onLogout }) => {
   const [activeRole, setActiveRole] = useState<UserRole>(initialRole);
 
+  const handleFeatureAlert = (feature: string) => {
+    alert(`${feature} is not available in the demo.`);
+  };
+
   return (
     <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-white min-h-screen pb-10 flex flex-col">
       {/* Top App Bar */}
@@ -20,12 +24,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
         <div className="flex items-center p-4 justify-between max-w-md mx-auto">
           <button 
             onClick={onBack}
-            className="flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors active:scale-90"
           >
             <span className="material-symbols-outlined text-slate-900 dark:text-white" style={{ fontSize: '24px' }}>arrow_back</span>
           </button>
           <h2 className="text-lg font-bold leading-tight flex-1 text-center">Profile</h2>
-          <button className="flex w-10 items-center justify-end">
+          <button 
+            onClick={() => handleFeatureAlert("Profile Editing")}
+            className="flex w-10 items-center justify-end active:scale-95"
+          >
             <span className="text-primary text-base font-bold">Edit</span>
           </button>
         </div>
@@ -39,7 +46,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
               className="bg-center bg-no-repeat bg-cover rounded-full h-28 w-28 ring-4 ring-surface-light dark:ring-surface-dark shadow-lg" 
               style={{ backgroundImage: `url("${user.avatar}")` }}
             />
-            <button className="absolute bottom-0 right-0 bg-primary text-white rounded-full p-1.5 shadow-md flex items-center justify-center ring-2 ring-background-light dark:ring-background-dark">
+            <button 
+              onClick={() => handleFeatureAlert("Camera/Photo Upload")}
+              className="absolute bottom-0 right-0 bg-primary text-white rounded-full p-1.5 shadow-md flex items-center justify-center ring-2 ring-background-light dark:ring-background-dark active:scale-90 transition-transform"
+            >
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>photo_camera</span>
             </button>
           </div>
@@ -62,7 +72,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
           <div className="bg-slate-200 dark:bg-surface-dark p-1 rounded-xl flex">
             <button 
               onClick={() => setActiveRole(UserRole.DRIVER)}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold text-center transition-all ${
+              className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold text-center transition-all active:scale-[0.98] ${
                 activeRole === UserRole.DRIVER ? 'bg-surface-light dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-text-secondary'
               }`}
             >
@@ -70,7 +80,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
             </button>
             <button 
               onClick={() => setActiveRole(UserRole.OWNER)}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold text-center transition-all ${
+              className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold text-center transition-all active:scale-[0.98] ${
                 activeRole === UserRole.OWNER ? 'bg-surface-light dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-text-secondary'
               }`}
             >
@@ -112,10 +122,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
         <div className="flex flex-col gap-4">
           <div className="px-4 flex items-center justify-between">
             <h3 className="text-lg font-bold">Vehicle Details</h3>
-            <button className="text-primary text-sm font-semibold">Add New</button>
+            <button 
+              onClick={() => handleFeatureAlert("Adding a Vehicle")}
+              className="text-primary text-sm font-semibold active:scale-95"
+            >
+              Add New
+            </button>
           </div>
           <div className="px-4">
-            <div className="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm flex items-start gap-4">
+            <div 
+              onClick={() => handleFeatureAlert("Vehicle Management")}
+              className="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm flex items-start gap-4 cursor-pointer active:scale-[0.99] transition-transform"
+            >
               <div className="w-20 h-20 shrink-0 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center overflow-hidden">
                 <img className="w-full h-full object-cover" src={IMAGES.CAR_IMAGE}/>
               </div>
@@ -142,7 +160,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
             <h3 className="text-lg font-bold">Documents</h3>
           </div>
           <div className="px-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between bg-surface-light dark:bg-surface-dark p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div 
+              onClick={() => handleFeatureAlert("Viewing Documents")}
+              className="flex items-center justify-between bg-surface-light dark:bg-surface-dark p-4 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer active:scale-[0.99] transition-transform"
+            >
               <div className="flex items-center gap-3">
                 <div className="bg-blue-500/10 p-2 rounded-lg text-primary">
                   <span className="material-symbols-outlined">badge</span>
@@ -154,7 +175,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
               </div>
               <span className="material-symbols-outlined text-green-500">check_circle</span>
             </div>
-            <div className="flex items-center justify-between bg-surface-light dark:bg-surface-dark p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div 
+              onClick={() => handleFeatureAlert("Document Verification")}
+              className="flex items-center justify-between bg-surface-light dark:bg-surface-dark p-4 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer active:scale-[0.99] transition-transform"
+            >
               <div className="flex items-center gap-3">
                 <div className="bg-purple-500/10 p-2 rounded-lg text-purple-500">
                   <span className="material-symbols-outlined">security</span>
@@ -185,11 +209,17 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
                   <p className="text-xs text-text-secondary">•••• 4829</p>
                 </div>
               </div>
-              <button className="text-text-secondary hover:text-primary transition-colors">
+              <button 
+                onClick={() => handleFeatureAlert("Editing Payment Methods")}
+                className="text-text-secondary hover:text-primary transition-colors active:scale-90"
+              >
                 <span className="material-symbols-outlined">edit</span>
               </button>
             </div>
-            <button className="mt-3 w-full py-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-sm font-medium text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-2">
+            <button 
+              onClick={() => handleFeatureAlert("Adding Payment Methods")}
+              className="mt-3 w-full py-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-sm font-medium text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-2 active:scale-[0.98]"
+            >
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add</span>
               Add Payment Method
             </button>
@@ -198,14 +228,20 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
 
         {/* Account Actions */}
         <div className="px-4 pt-4 flex flex-col gap-3">
-          <button className="flex items-center justify-between w-full p-4 rounded-xl bg-surface-light dark:bg-surface-dark hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group">
+          <button 
+            onClick={() => handleFeatureAlert("System Settings")}
+            className="flex items-center justify-between w-full p-4 rounded-xl bg-surface-light dark:bg-surface-dark hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group active:scale-[0.98]"
+          >
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-text-secondary group-hover:text-primary transition-colors">settings</span>
               <span className="font-medium">Settings</span>
             </div>
             <span className="material-symbols-outlined text-text-secondary" style={{ fontSize: '20px' }}>chevron_right</span>
           </button>
-          <button className="flex items-center justify-between w-full p-4 rounded-xl bg-surface-light dark:bg-surface-dark hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group">
+          <button 
+            onClick={() => handleFeatureAlert("Help & Support")}
+            className="flex items-center justify-between w-full p-4 rounded-xl bg-surface-light dark:bg-surface-dark hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group active:scale-[0.98]"
+          >
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-text-secondary group-hover:text-primary transition-colors">help</span>
               <span className="font-medium">Help & Support</span>
@@ -214,7 +250,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
           </button>
           <button 
             onClick={onLogout}
-            className="mt-4 w-full py-4 rounded-xl bg-red-500/10 text-red-500 font-bold text-base hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
+            className="mt-4 w-full py-4 rounded-xl bg-red-500/10 text-red-500 font-bold text-base hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 active:scale-[0.98]"
           >
             <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>logout</span>
             Log Out

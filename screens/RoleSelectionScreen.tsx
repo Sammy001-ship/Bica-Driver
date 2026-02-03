@@ -6,17 +6,18 @@ import { IMAGES } from '../constants';
 interface RoleSelectionScreenProps {
   onSelectRole: (role: UserRole) => void;
   onBack: () => void;
+  onGoToLogin: () => void;
 }
 
-const RoleSelectionScreen: React.FC<RoleSelectionScreenProps> = ({ onSelectRole, onBack }) => {
+const RoleSelectionScreen: React.FC<RoleSelectionScreenProps> = ({ onSelectRole, onBack, onGoToLogin }) => {
   return (
     <div className="flex h-screen w-full flex-col bg-background-light dark:bg-background-dark">
-      <header className="flex items-center justify-between px-4 py-3 sticky top-0 z-10">
+      <header className="flex items-center justify-between px-4 py-3 sticky top-0 z-10 bg-background-light dark:bg-background-dark">
         <button 
           onClick={onBack}
           className="flex size-10 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
         >
-          <span className="material-symbols-outlined text-slate-900 dark:text-white">arrow_back_ios_new</span>
+          <span className="material-symbols-outlined text-slate-900 dark:text-white">arrow_back</span>
         </button>
         <h1 className="text-lg font-bold leading-tight tracking-tight text-center">Bicadriver</h1>
         <div className="size-10"></div>
@@ -96,7 +97,12 @@ const RoleSelectionScreen: React.FC<RoleSelectionScreenProps> = ({ onSelectRole,
       <footer className="p-6 text-center mt-auto">
         <p className="text-slate-500 dark:text-slate-400 text-sm">
           Already have an account? 
-          <span className="text-primary font-bold hover:underline ml-1 cursor-pointer">Log In</span>
+          <span 
+            onClick={onGoToLogin}
+            className="text-primary font-bold hover:underline ml-1 cursor-pointer"
+          >
+            Log In
+          </span>
         </p>
       </footer>
     </div>
