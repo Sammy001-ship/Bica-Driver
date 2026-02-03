@@ -10,13 +10,26 @@ interface RequestRideScreenProps {
 const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, onBack }) => {
   const [rideType, setRideType] = useState<'now' | 'schedule'>('now');
   const [isSearching, setIsSearching] = useState(false);
+  const [scheduleData, setScheduleData] = useState({
+    date: '',
+    time: ''
+  });
 
   const handleFindDriver = () => {
+    if (rideType === 'schedule' && (!scheduleData.date || !scheduleData.time)) {
+      alert("Please select both date and time for your scheduled ride.");
+      return;
+    }
+    
     setIsSearching(true);
-    // Simulate a search delay
+    // Simulate a search or scheduling delay
     setTimeout(() => {
       setIsSearching(false);
-      alert("Search initiated! Looking for the nearest available driver.");
+      if (rideType === 'now') {
+        alert("Search initiated! Looking for the nearest available driver.");
+      } else {
+        alert(`Ride scheduled for ${scheduleData.date} at ${scheduleData.time}! We'll notify you when a driver is assigned.`);
+      }
     }, 2000);
   };
 
@@ -93,6 +106,33 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
             </button>
           </div>
 
+          {/* Schedule Picker - Only shown when schedule is selected */}
+          {rideType === 'schedule' && (
+            <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+              <span className="font-medium text-slate-300 text-sm pl-1">Schedule Details</span>
+              <div className="flex gap-3">
+                <div className="flex-1 flex items-center bg-input-dark rounded-xl px-4 h-12 border border-transparent focus-within:border-primary/50 transition-colors">
+                  <span className="material-symbols-outlined text-slate-500 text-[20px] mr-2">calendar_today</span>
+                  <input 
+                    className="bg-transparent border-none text-white placeholder-slate-500 text-sm font-medium w-full focus:ring-0 p-0 [color-scheme:dark]" 
+                    type="date" 
+                    value={scheduleData.date}
+                    onChange={(e) => setScheduleData({...scheduleData, date: e.target.value})}
+                  />
+                </div>
+                <div className="flex-1 flex items-center bg-input-dark rounded-xl px-4 h-12 border border-transparent focus-within:border-primary/50 transition-colors">
+                  <span className="material-symbols-outlined text-slate-500 text-[20px] mr-2">schedule</span>
+                  <input 
+                    className="bg-transparent border-none text-white placeholder-slate-500 text-sm font-medium w-full focus:ring-0 p-0 [color-scheme:dark]" 
+                    type="time" 
+                    value={scheduleData.time}
+                    onChange={(e) => setScheduleData({...scheduleData, time: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Route Visualizer & Inputs */}
           <div className="flex gap-4">
             <div className="flex flex-col items-center pt-4 pb-2">
@@ -135,7 +175,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
 
           {/* Preferences */}
           <div className="flex flex-col gap-2">
-            <span className="font-medium text-slate-300 text-sm">Preferences</span>
+            <span className="font-medium text-slate-300 text-sm pl-1">Preferences</span>
             <div className="bg-input-dark rounded-xl p-4 flex items-start gap-3 border border-transparent focus-within:border-primary/50 transition-colors">
               <span className="material-symbols-outlined text-slate-400 text-[20px] mt-0.5">edit_note</span>
               <textarea 
@@ -173,11 +213,11 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
               {isSearching ? (
                 <>
                   <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                  <span>Searching...</span>
+                  <span>{rideType === 'now' ? 'Searching...' : 'Scheduling...'}</span>
                 </>
               ) : (
                 <>
-                  <span>Find a Driver</span>
+                  <span>{rideType === 'now' ? 'Find a Driver' : 'Schedule Ride'}</span>
                   <span className="material-symbols-outlined">arrow_forward</span>
                 </>
               )}
