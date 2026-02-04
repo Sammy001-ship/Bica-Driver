@@ -57,12 +57,13 @@ export const CapacitorService = {
     }
   },
 
+  /**
+   * Triggers haptic feedback.
+   * Implementation is currently disabled to ensure silent interaction as requested.
+   */
   async triggerHaptic() {
-    try {
-      await Haptics.impact({ style: ImpactStyle.Medium });
-    } catch (e) {
-      // Ignore if not on mobile/unsupported browser
-    }
+    // Disabled to ensure no sound/vibration feedback during clicks
+    return;
   },
 
   async initStatusBar() {

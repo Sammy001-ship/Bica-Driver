@@ -1,7 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IMAGES } from '../constants';
 import { CapacitorService } from '../services/CapacitorService';
+import { GoogleGenAI } from "@google/genai";
+import { Config } from '../services/Config';
 
 interface RequestRideScreenProps {
   onOpenProfile: () => void;
@@ -12,6 +14,9 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
   const [rideType, setRideType] = useState<'now' | 'schedule'>('now');
   const [isSearching, setIsSearching] = useState(false);
   const [pickupLocation, setPickupLocation] = useState('Current Location');
+  const [destination, setDestination] = useState('');
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const [scheduleData, setScheduleData] = useState({
     date: '',
     time: ''
@@ -28,6 +33,33 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
       setTimeout(() => setPickupLocation('Current Location'), 2000);
     }
   };
+
+  const getAiInsight = async (dest: string) => {
+    if (!dest || dest.length < 3 || !Config.apiKey) return;
+    
+    setIsAiLoading(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: Config.apiKey });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Provide a very short (max 15 words) helpful travel tip or traffic insight for a car trip to: ${dest} in the context of Lagos, Nigeria. Be professional and concise.`,
+      });
+      setAiInsight(response.text || "Safe journey ahead!");
+    } catch (error) {
+      console.error("AI Insight Error:", error);
+      setAiInsight(null);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  // Debounce AI request
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (destination) getAiInsight(destination);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [destination]);
 
   const handleFindDriver = () => {
     CapacitorService.triggerHaptic();
@@ -74,7 +106,10 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
         >
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
-        <h2 className="text-white text-lg font-bold tracking-tight drop-shadow-md">Request a Driver</h2>
+        <div className="flex flex-col items-center">
+          <h2 className="text-white text-lg font-bold tracking-tight drop-shadow-md">Request a Driver</h2>
+          {Config.isSandbox && <span className="text-[10px] text-primary font-bold uppercase tracking-widest">Sandbox Mode</span>}
+        </div>
         <button 
           onClick={onOpenProfile}
           className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg hover:bg-surface-dark transition-colors active:scale-95"
@@ -110,32 +145,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
             </button>
           </div>
 
-          {rideType === 'schedule' && (
-            <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-              <span className="font-medium text-slate-300 text-sm pl-1">Schedule Details</span>
-              <div className="flex gap-3">
-                <div className="flex-1 flex items-center bg-input-dark rounded-xl px-4 h-12 border border-transparent focus-within:border-primary/50 transition-colors">
-                  <span className="material-symbols-outlined text-slate-500 text-[20px] mr-2">calendar_today</span>
-                  <input 
-                    className="bg-transparent border-none text-white placeholder-slate-500 text-sm font-medium w-full focus:ring-0 p-0 [color-scheme:dark]" 
-                    type="date" 
-                    value={scheduleData.date}
-                    onChange={(e) => setScheduleData({...scheduleData, date: e.target.value})}
-                  />
-                </div>
-                <div className="flex-1 flex items-center bg-input-dark rounded-xl px-4 h-12 border border-transparent focus-within:border-primary/50 transition-colors">
-                  <span className="material-symbols-outlined text-slate-500 text-[20px] mr-2">schedule</span>
-                  <input 
-                    className="bg-transparent border-none text-white placeholder-slate-500 text-sm font-medium w-full focus:ring-0 p-0 [color-scheme:dark]" 
-                    type="time" 
-                    value={scheduleData.time}
-                    onChange={(e) => setScheduleData({...scheduleData, time: e.target.value})}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
           <div className="flex gap-4">
             <div className="flex flex-col items-center pt-4 pb-2">
               <div className="w-4 h-4 rounded-full border-2 border-primary bg-transparent shrink-0"></div>
@@ -167,25 +176,30 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
                     className="bg-transparent border-none text-white placeholder-slate-500 text-sm font-medium w-full focus:ring-0 p-0" 
                     placeholder="Enter destination" 
                     type="text" 
+                    value={destination}
+                    onChange={(e) => setDestination(e.target.value)}
                   />
-                  <span className="material-symbols-outlined text-slate-500 text-[20px] ml-2">search</span>
+                  <span className={`material-symbols-outlined text-[20px] ml-2 transition-colors ${isAiLoading ? 'text-primary animate-pulse' : 'text-slate-500'}`}>
+                    {isAiLoading ? 'auto_awesome' : 'search'}
+                  </span>
                 </div>
               </div>
             </div>
           </div>
 
-          <hr className="border-slate-700/50" />
-
-          <div className="flex flex-col gap-2">
-            <span className="font-medium text-slate-300 text-sm pl-1">Preferences</span>
-            <div className="bg-input-dark rounded-xl p-4 flex items-start gap-3 border border-transparent focus-within:border-primary/50 transition-colors">
-              <span className="material-symbols-outlined text-slate-400 text-[20px] mt-0.5">edit_note</span>
-              <textarea 
-                className="bg-transparent border-none text-white placeholder-slate-500 text-sm font-medium w-full focus:ring-0 p-0 resize-none h-10 leading-relaxed" 
-                placeholder="Add note for driver (e.g. child seat, luggage...)"
-              />
+          {(aiInsight || isAiLoading) && (
+            <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex gap-3 animate-in fade-in slide-in-from-top-2 duration-500">
+              <span className={`material-symbols-outlined text-primary text-[20px] shrink-0 ${isAiLoading ? 'animate-spin' : ''}`}>
+                {isAiLoading ? 'progress_activity' : 'auto_awesome'}
+              </span>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] font-bold text-primary uppercase tracking-wider">AI Travel Insight</span>
+                <p className="text-xs text-slate-300 font-medium leading-relaxed italic">
+                  {isAiLoading ? "Analyzing destination..." : aiInsight}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="mt-2 space-y-4">
             <div className="flex items-center justify-between px-2">
@@ -211,11 +225,11 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
               {isSearching ? (
                 <>
                   <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                  <span>{rideType === 'now' ? 'Searching...' : 'Scheduling...'}</span>
+                  <span>Searching...</span>
                 </>
               ) : (
                 <>
-                  <span>{rideType === 'now' ? 'Find a Driver' : 'Schedule Ride'}</span>
+                  <span>Find a Driver</span>
                   <span className="material-symbols-outlined">arrow_forward</span>
                 </>
               )}
