@@ -113,7 +113,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
         </button>
         <div className="flex flex-col items-center">
           <h2 className="text-white text-lg font-bold tracking-tight drop-shadow-md">Request a Driver</h2>
-          {Config.isSandbox && <span className="text-[10px] text-primary font-bold uppercase tracking-widest">Sandbox Mode</span>}
         </div>
         <button 
           onClick={onOpenProfile}
