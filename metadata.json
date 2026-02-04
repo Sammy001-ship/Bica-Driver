@@ -2,6 +2,7 @@
   "name": "Bicadriver",
   "description": "A premium ride-hailing and driver service platform connecting car owners with professional drivers.",
   "requestFramePermissions": [
-    "geolocation"
+    "geolocation",
+    "camera"
   ]
 }

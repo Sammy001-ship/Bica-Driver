@@ -2,24 +2,34 @@
 import React, { useState } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { IMAGES } from '../constants';
+import { CapacitorService } from '../services/CapacitorService';
 
 interface ProfileScreenProps {
   user: UserProfile;
   initialRole: UserRole;
   onBack: () => void;
   onLogout: () => void;
+  onUpdateAvatar: (newAvatar: string) => void;
 }
 
-const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack, onLogout }) => {
+const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack, onLogout, onUpdateAvatar }) => {
   const [activeRole, setActiveRole] = useState<UserRole>(initialRole);
 
   const handleFeatureAlert = (feature: string) => {
+    CapacitorService.triggerHaptic();
     alert(`${feature} is not available in the demo.`);
+  };
+
+  const handleCameraUpdate = async () => {
+    CapacitorService.triggerHaptic();
+    const photo = await CapacitorService.takePhoto();
+    if (photo) {
+      onUpdateAvatar(photo);
+    }
   };
 
   return (
     <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-white min-h-screen pb-10 flex flex-col">
-      {/* Top App Bar */}
       <div className="sticky top-0 z-50 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center p-4 justify-between max-w-md mx-auto">
           <button 
@@ -39,18 +49,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
       </div>
 
       <div className="flex-1 flex flex-col gap-6 pb-8 overflow-y-auto no-scrollbar">
-        {/* Profile Header */}
         <div className="flex flex-col items-center pt-6 px-4">
           <div className="relative">
             <div 
-              className="bg-center bg-no-repeat bg-cover rounded-full h-28 w-28 ring-4 ring-surface-light dark:ring-surface-dark shadow-lg" 
-              style={{ backgroundImage: `url("${user.avatar}")` }}
-            />
-            <button 
-              onClick={() => handleFeatureAlert("Camera/Photo Upload")}
-              className="absolute bottom-0 right-0 bg-primary text-white rounded-full p-1.5 shadow-md flex items-center justify-center ring-2 ring-background-light dark:ring-background-dark active:scale-90 transition-transform"
+              className="bg-center bg-no-repeat bg-cover rounded-full h-28 w-28 ring-4 ring-surface-light dark:ring-surface-dark shadow-lg overflow-hidden" 
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>photo_camera</span>
+              <img src={user.avatar} className="w-full h-full object-cover" alt="Profile" />
+            </div>
+            <button 
+              onClick={handleCameraUpdate}
+              className="absolute bottom-0 right-0 bg-primary text-white rounded-full p-2 shadow-md flex items-center justify-center ring-2 ring-background-light dark:ring-background-dark active:scale-90 transition-transform"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>photo_camera</span>
             </button>
           </div>
           <div className="mt-4 flex flex-col items-center">
@@ -67,20 +77,19 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
           </div>
         </div>
 
-        {/* Role Switcher */}
         <div className="px-4">
           <div className="bg-slate-200 dark:bg-surface-dark p-1 rounded-xl flex">
             <button 
-              onClick={() => setActiveRole(UserRole.DRIVER)}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold text-center transition-all active:scale-[0.98] ${
+              onClick={() => { CapacitorService.triggerHaptic(); setActiveRole(UserRole.DRIVER); }}
+              className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold text-center transition-all ${
                 activeRole === UserRole.DRIVER ? 'bg-surface-light dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-text-secondary'
               }`}
             >
               Driver Mode
             </button>
             <button 
-              onClick={() => setActiveRole(UserRole.OWNER)}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold text-center transition-all active:scale-[0.98] ${
+              onClick={() => { CapacitorService.triggerHaptic(); setActiveRole(UserRole.OWNER); }}
+              className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold text-center transition-all ${
                 activeRole === UserRole.OWNER ? 'bg-surface-light dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-text-secondary'
               }`}
             >
@@ -89,7 +98,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
           </div>
         </div>
 
-        {/* Personal Information */}
         <div className="flex flex-col gap-4">
           <div className="px-4">
             <h3 className="text-lg font-bold">Personal Information</h3>
@@ -118,22 +126,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
           </div>
         </div>
 
-        {/* Vehicle Details (Always shown for demo) */}
         <div className="flex flex-col gap-4">
           <div className="px-4 flex items-center justify-between">
             <h3 className="text-lg font-bold">Vehicle Details</h3>
-            <button 
-              onClick={() => handleFeatureAlert("Adding a Vehicle")}
-              className="text-primary text-sm font-semibold active:scale-95"
-            >
-              Add New
-            </button>
+            <button onClick={() => handleFeatureAlert("Adding a Vehicle")} className="text-primary text-sm font-semibold active:scale-95">Add New</button>
           </div>
           <div className="px-4">
-            <div 
-              onClick={() => handleFeatureAlert("Vehicle Management")}
-              className="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm flex items-start gap-4 cursor-pointer active:scale-[0.99] transition-transform"
-            >
+            <div onClick={() => handleFeatureAlert("Vehicle Management")} className="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm flex items-start gap-4 cursor-pointer active:scale-[0.99] transition-transform">
               <div className="w-20 h-20 shrink-0 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center overflow-hidden">
                 <img className="w-full h-full object-cover" src={IMAGES.CAR_IMAGE}/>
               </div>
@@ -154,104 +153,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
           </div>
         </div>
 
-        {/* Documents */}
-        <div className="flex flex-col gap-4">
-          <div className="px-4">
-            <h3 className="text-lg font-bold">Documents</h3>
-          </div>
-          <div className="px-4 flex flex-col gap-3">
-            <div 
-              onClick={() => handleFeatureAlert("Viewing Documents")}
-              className="flex items-center justify-between bg-surface-light dark:bg-surface-dark p-4 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer active:scale-[0.99] transition-transform"
-            >
-              <div className="flex items-center gap-3">
-                <div className="bg-blue-500/10 p-2 rounded-lg text-primary">
-                  <span className="material-symbols-outlined">badge</span>
-                </div>
-                <div>
-                  <p className="font-medium text-sm">Driving License</p>
-                  <p className="text-xs text-text-secondary">Exp: Dec 2025</p>
-                </div>
-              </div>
-              <span className="material-symbols-outlined text-green-500">check_circle</span>
-            </div>
-            <div 
-              onClick={() => handleFeatureAlert("Document Verification")}
-              className="flex items-center justify-between bg-surface-light dark:bg-surface-dark p-4 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer active:scale-[0.99] transition-transform"
-            >
-              <div className="flex items-center gap-3">
-                <div className="bg-purple-500/10 p-2 rounded-lg text-purple-500">
-                  <span className="material-symbols-outlined">security</span>
-                </div>
-                <div>
-                  <p className="font-medium text-sm">Vehicle Insurance</p>
-                  <p className="text-xs text-text-secondary">Exp: Mar 2024</p>
-                </div>
-              </div>
-              <span className="material-symbols-outlined text-yellow-500">pending</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Payment Methods */}
-        <div className="flex flex-col gap-4">
-          <div className="px-4">
-            <h3 className="text-lg font-bold">Payment Methods</h3>
-          </div>
-          <div className="px-4">
-            <div className="bg-surface-light dark:bg-surface-dark p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-slate-100 dark:bg-slate-800 h-10 w-14 rounded flex items-center justify-center">
-                  <span className="material-symbols-outlined text-slate-500">credit_card</span>
-                </div>
-                <div>
-                  <p className="font-medium text-sm">Mastercard</p>
-                  <p className="text-xs text-text-secondary">•••• 4829</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => handleFeatureAlert("Editing Payment Methods")}
-                className="text-text-secondary hover:text-primary transition-colors active:scale-90"
-              >
-                <span className="material-symbols-outlined">edit</span>
-              </button>
-            </div>
-            <button 
-              onClick={() => handleFeatureAlert("Adding Payment Methods")}
-              className="mt-3 w-full py-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-sm font-medium text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-2 active:scale-[0.98]"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add</span>
-              Add Payment Method
-            </button>
-          </div>
-        </div>
-
-        {/* Account Actions */}
         <div className="px-4 pt-4 flex flex-col gap-3">
-          <button 
-            onClick={() => handleFeatureAlert("System Settings")}
-            className="flex items-center justify-between w-full p-4 rounded-xl bg-surface-light dark:bg-surface-dark hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group active:scale-[0.98]"
-          >
+          <button onClick={() => handleFeatureAlert("System Settings")} className="flex items-center justify-between w-full p-4 rounded-xl bg-surface-light dark:bg-surface-dark hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group active:scale-[0.98]">
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-text-secondary group-hover:text-primary transition-colors">settings</span>
               <span className="font-medium">Settings</span>
             </div>
             <span className="material-symbols-outlined text-text-secondary" style={{ fontSize: '20px' }}>chevron_right</span>
           </button>
-          <button 
-            onClick={() => handleFeatureAlert("Help & Support")}
-            className="flex items-center justify-between w-full p-4 rounded-xl bg-surface-light dark:bg-surface-dark hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group active:scale-[0.98]"
-          >
-            <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-text-secondary group-hover:text-primary transition-colors">help</span>
-              <span className="font-medium">Help & Support</span>
-            </div>
-            <span className="material-symbols-outlined text-text-secondary" style={{ fontSize: '20px' }}>chevron_right</span>
-          </button>
-          <button 
-            onClick={onLogout}
-            className="mt-4 w-full py-4 rounded-xl bg-red-500/10 text-red-500 font-bold text-base hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 active:scale-[0.98]"
-          >
+          <button onClick={onLogout} className="mt-4 w-full py-4 rounded-xl bg-red-500/10 text-red-500 font-bold text-base hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 active:scale-[0.98]">
             <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>logout</span>
             Log Out
           </button>

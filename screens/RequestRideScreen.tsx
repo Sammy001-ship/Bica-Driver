@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { IMAGES } from '../constants';
+import { CapacitorService } from '../services/CapacitorService';
 
 interface RequestRideScreenProps {
   onOpenProfile: () => void;
@@ -10,19 +11,32 @@ interface RequestRideScreenProps {
 const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, onBack }) => {
   const [rideType, setRideType] = useState<'now' | 'schedule'>('now');
   const [isSearching, setIsSearching] = useState(false);
+  const [pickupLocation, setPickupLocation] = useState('Current Location');
   const [scheduleData, setScheduleData] = useState({
     date: '',
     time: ''
   });
 
+  const handleGetLocation = async () => {
+    CapacitorService.triggerHaptic();
+    setPickupLocation('Fetching location...');
+    const pos = await CapacitorService.getCurrentLocation();
+    if (pos) {
+      setPickupLocation(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
+    } else {
+      setPickupLocation('Location Error');
+      setTimeout(() => setPickupLocation('Current Location'), 2000);
+    }
+  };
+
   const handleFindDriver = () => {
+    CapacitorService.triggerHaptic();
     if (rideType === 'schedule' && (!scheduleData.date || !scheduleData.time)) {
       alert("Please select both date and time for your scheduled ride.");
       return;
     }
     
     setIsSearching(true);
-    // Simulate a search or scheduling delay
     setTimeout(() => {
       setIsSearching(false);
       if (rideType === 'now') {
@@ -33,13 +47,8 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     }, 2000);
   };
 
-  const handleFeatureComingSoon = (feature: string) => {
-    alert(`${feature} feature coming soon!`);
-  };
-
   return (
     <div className="h-screen w-full overflow-hidden flex flex-col relative bg-background-dark">
-      {/* Map Background */}
       <div className="absolute inset-0 z-0">
         <div className="w-full h-full bg-slate-800 relative overflow-hidden">
           <img 
@@ -48,8 +57,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
             src={IMAGES.MAP_BG}
           />
           <div className="absolute inset-0 bg-[#101622]/40 backdrop-grayscale-[0.5]"></div>
-          
-          {/* Mock Car Pin */}
           <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
             <div className="bg-primary/20 p-2 rounded-full animate-pulse">
               <div className="bg-primary text-white p-2 rounded-full shadow-lg shadow-primary/40">
@@ -60,7 +67,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
         </div>
       </div>
 
-      {/* Top Navigation */}
       <div className="relative z-10 flex items-center justify-between p-4 pt-8 pb-4 bg-gradient-to-b from-background-dark/90 to-transparent">
         <button 
           onClick={onBack}
@@ -79,20 +85,18 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
 
       <div className="flex-1"></div>
 
-      {/* Bottom Sheet */}
       <div className="relative z-20 w-full bg-surface-dark rounded-t-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.4)] flex flex-col max-h-[85vh]">
         <div className="w-full flex justify-center pt-3 pb-1">
           <div className="h-1.5 w-12 rounded-full bg-slate-600"></div>
         </div>
         
         <div className="p-6 pt-2 pb-8 flex flex-col gap-6 overflow-y-auto no-scrollbar">
-          {/* Segmented Control */}
           <div className="flex p-1 bg-input-dark rounded-xl">
             <button 
               onClick={() => setRideType('now')}
               className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-200 ${
                 rideType === 'now' ? 'bg-primary text-white shadow-md' : 'text-slate-400'
-              } active:scale-[0.98]`}
+              }`}
             >
               Ride Now
             </button>
@@ -100,13 +104,12 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
               onClick={() => setRideType('schedule')}
               className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-200 ${
                 rideType === 'schedule' ? 'bg-primary text-white shadow-md' : 'text-slate-400'
-              } active:scale-[0.98]`}
+              }`}
             >
               Schedule Later
             </button>
           </div>
 
-          {/* Schedule Picker - Only shown when schedule is selected */}
           {rideType === 'schedule' && (
             <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
               <span className="font-medium text-slate-300 text-sm pl-1">Schedule Details</span>
@@ -133,7 +136,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
             </div>
           )}
 
-          {/* Route Visualizer & Inputs */}
           <div className="flex gap-4">
             <div className="flex flex-col items-center pt-4 pb-2">
               <div className="w-4 h-4 rounded-full border-2 border-primary bg-transparent shrink-0"></div>
@@ -149,10 +151,11 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
                     className="bg-transparent border-none text-white placeholder-slate-500 text-sm font-medium w-full focus:ring-0 p-0" 
                     placeholder="Where are you?" 
                     type="text" 
-                    defaultValue="Current Location"
+                    value={pickupLocation}
+                    onChange={(e) => setPickupLocation(e.target.value)}
                   />
-                  <button onClick={() => handleFeatureComingSoon("GPS Detection")} className="active:scale-90">
-                    <span className="material-symbols-outlined text-primary text-[20px] ml-2">my_location</span>
+                  <button onClick={handleGetLocation} className="active:scale-90 p-1">
+                    <span className="material-symbols-outlined text-primary text-[20px]">my_location</span>
                   </button>
                 </div>
               </div>
@@ -173,7 +176,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
 
           <hr className="border-slate-700/50" />
 
-          {/* Preferences */}
           <div className="flex flex-col gap-2">
             <span className="font-medium text-slate-300 text-sm pl-1">Preferences</span>
             <div className="bg-input-dark rounded-xl p-4 flex items-start gap-3 border border-transparent focus-within:border-primary/50 transition-colors">
@@ -185,7 +187,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
             </div>
           </div>
 
-          {/* Estimated Price & CTA */}
           <div className="mt-2 space-y-4">
             <div className="flex items-center justify-between px-2">
               <div className="flex flex-col">
@@ -195,10 +196,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
                   <span className="text-sm font-medium text-slate-400">- ₦20,000</span>
                 </div>
               </div>
-              <div 
-                onClick={() => handleFeatureComingSoon("Payment Selection")}
-                className="flex items-center gap-2 bg-input-dark px-3 py-1.5 rounded-lg border border-slate-700/50 cursor-pointer hover:bg-slate-700/50 active:scale-95 transition-transform"
-              >
+              <div className="flex items-center gap-2 bg-input-dark px-3 py-1.5 rounded-lg border border-slate-700/50 cursor-pointer hover:bg-slate-700/50 active:scale-95 transition-transform">
                 <span className="material-symbols-outlined text-slate-400 text-[16px]">credit_card</span>
                 <span className="text-xs font-semibold text-slate-300">Personal • 4288</span>
                 <span className="material-symbols-outlined text-slate-500 text-[16px]">keyboard_arrow_down</span>

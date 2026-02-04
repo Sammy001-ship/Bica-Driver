@@ -9,6 +9,7 @@ import RequestRideScreen from './screens/RequestRideScreen';
 import DriverMainScreen from './screens/DriverMainScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import { IMAGES } from './constants';
+import { CapacitorService } from './services/CapacitorService';
 
 const MOCK_USER: UserProfile = {
   name: "Alex Morgan",
@@ -23,19 +24,19 @@ const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.WELCOME);
   const [userRole, setUserRole] = useState<UserRole>(UserRole.UNSET);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile>(MOCK_USER);
 
-  // Transition helper
+  useEffect(() => {
+    CapacitorService.initStatusBar();
+  }, []);
+
   const navigateTo = (screen: AppScreen) => {
+    CapacitorService.triggerHaptic();
     setCurrentScreen(screen);
   };
 
-  const handleCreateAccount = () => {
-    navigateTo(AppScreen.SIGN_UP);
-  };
-
-  const handleGoToLogin = () => {
-    navigateTo(AppScreen.LOGIN);
-  };
+  const handleCreateAccount = () => navigateTo(AppScreen.SIGN_UP);
+  const handleGoToLogin = () => navigateTo(AppScreen.LOGIN);
 
   const handleAuthComplete = () => {
     setIsLoggedIn(true);
@@ -55,6 +56,10 @@ const App: React.FC = () => {
     setIsLoggedIn(false);
     setUserRole(UserRole.UNSET);
     navigateTo(AppScreen.WELCOME);
+  };
+
+  const handleUpdateAvatar = (newAvatar: string) => {
+    setUserProfile({ ...userProfile, avatar: newAvatar });
   };
 
   const renderScreen = () => {
@@ -84,7 +89,7 @@ const App: React.FC = () => {
       case AppScreen.PROFILE:
         return (
           <ProfileScreen 
-            user={MOCK_USER} 
+            user={userProfile} 
             initialRole={userRole} 
             onBack={() => {
               if (userRole === UserRole.DRIVER) {
@@ -94,6 +99,7 @@ const App: React.FC = () => {
               }
             }} 
             onLogout={handleLogout}
+            onUpdateAvatar={handleUpdateAvatar}
           />
         );
       default:
