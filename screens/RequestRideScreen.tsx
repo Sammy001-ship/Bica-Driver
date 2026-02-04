@@ -22,6 +22,8 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     time: ''
   });
 
+  const isScheduleValid = rideType === 'now' || (scheduleData.date && scheduleData.time);
+
   const handleGetLocation = async () => {
     CapacitorService.triggerHaptic();
     setPickupLocation('Fetching location...');
@@ -53,7 +55,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     }
   };
 
-  // Debounce AI request
   useEffect(() => {
     const timer = setTimeout(() => {
       if (destination) getAiInsight(destination);
@@ -61,22 +62,26 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     return () => clearTimeout(timer);
   }, [destination]);
 
-  const handleFindDriver = () => {
+  const handleMainAction = () => {
     CapacitorService.triggerHaptic();
-    if (rideType === 'schedule' && (!scheduleData.date || !scheduleData.time)) {
-      alert("Please select both date and time for your scheduled ride.");
-      return;
-    }
     
-    setIsSearching(true);
-    setTimeout(() => {
-      setIsSearching(false);
-      if (rideType === 'now') {
-        alert("Search initiated! Looking for the nearest available driver.");
-      } else {
-        alert(`Ride scheduled for ${scheduleData.date} at ${scheduleData.time}! We'll notify you when a driver is assigned.`);
+    if (rideType === 'schedule') {
+      if (!scheduleData.date || !scheduleData.time) {
+        alert("Please select both a date and time for your trip.");
+        return;
       }
-    }, 2000);
+      setIsSearching(true);
+      setTimeout(() => {
+        setIsSearching(false);
+        alert(`Success! Your ride for ${scheduleData.date} at ${scheduleData.time} has been scheduled. We'll remind you 30 minutes before.`);
+      }, 1500);
+    } else {
+      setIsSearching(true);
+      setTimeout(() => {
+        setIsSearching(false);
+        alert("Search initiated! We are connecting you with the nearest professional driver.");
+      }, 2000);
+    }
   };
 
   return (
@@ -120,7 +125,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
 
       <div className="flex-1"></div>
 
-      <div className="relative z-20 w-full bg-surface-dark rounded-t-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.4)] flex flex-col max-h-[85vh]">
+      <div className="relative z-20 w-full bg-surface-dark rounded-t-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.4)] flex flex-col max-h-[90vh]">
         <div className="w-full flex justify-center pt-3 pb-1">
           <div className="h-1.5 w-12 rounded-full bg-slate-600"></div>
         </div>
@@ -128,22 +133,63 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
         <div className="p-6 pt-2 pb-8 flex flex-col gap-6 overflow-y-auto no-scrollbar">
           <div className="flex p-1 bg-input-dark rounded-xl">
             <button 
-              onClick={() => setRideType('now')}
-              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-200 ${
+              onClick={() => { CapacitorService.triggerHaptic(); setRideType('now'); }}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
                 rideType === 'now' ? 'bg-primary text-white shadow-md' : 'text-slate-400'
               }`}
             >
+              <span className="material-symbols-outlined text-[18px]">bolt</span>
               Ride Now
             </button>
             <button 
-              onClick={() => setRideType('schedule')}
-              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-200 ${
+              onClick={() => { CapacitorService.triggerHaptic(); setRideType('schedule'); }}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
                 rideType === 'schedule' ? 'bg-primary text-white shadow-md' : 'text-slate-400'
               }`}
             >
-              Schedule Later
+              <span className="material-symbols-outlined text-[18px]">event</span>
+              Schedule
             </button>
           </div>
+
+          {rideType === 'schedule' && (
+            <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex flex-col gap-4 animate-in slide-in-from-top-4 duration-300">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="material-symbols-outlined text-primary text-[20px]">calendar_month</span>
+                <span className="text-sm font-bold text-white">Set Departure Time</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">Date</label>
+                  <div className="relative flex items-center bg-input-dark rounded-xl px-4 h-12 border border-slate-700/50 focus-within:border-primary/50 transition-colors">
+                    <input 
+                      className="bg-transparent border-none text-white text-sm font-medium w-full focus:ring-0 p-0 [color-scheme:dark]" 
+                      type="date" 
+                      min={new Date().toISOString().split('T')[0]}
+                      value={scheduleData.date}
+                      onChange={(e) => setScheduleData({...scheduleData, date: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">Time</label>
+                  <div className="relative flex items-center bg-input-dark rounded-xl px-4 h-12 border border-slate-700/50 focus-within:border-primary/50 transition-colors">
+                    <input 
+                      className="bg-transparent border-none text-white text-sm font-medium w-full focus:ring-0 p-0 [color-scheme:dark]" 
+                      type="time" 
+                      value={scheduleData.time}
+                      onChange={(e) => setScheduleData({...scheduleData, time: e.target.value})}
+                    />
+                  </div>
+                </div>
+              </div>
+              {scheduleData.date && scheduleData.time && (
+                <p className="text-[11px] text-primary/80 font-medium italic">
+                  Trip scheduled for {new Date(scheduleData.date).toLocaleDateString()} at {scheduleData.time}.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-4">
             <div className="flex flex-col items-center pt-4 pb-2">
@@ -155,7 +201,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
             <div className="flex flex-col gap-4 flex-1">
               <div className="group relative">
                 <label className="text-xs font-medium text-slate-400 mb-1 block pl-1">Pick-up Location</label>
-                <div className="flex items-center bg-input-dark rounded-xl px-4 h-12 border border-transparent focus-within:border-primary/50 transition-colors">
+                <div className="flex items-center bg-input-dark rounded-xl px-4 h-12 border border-slate-700/50 focus-within:border-primary/50 transition-colors">
                   <input 
                     className="bg-transparent border-none text-white placeholder-slate-500 text-sm font-medium w-full focus:ring-0 p-0" 
                     placeholder="Where are you?" 
@@ -171,7 +217,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
 
               <div className="group relative">
                 <label className="text-xs font-medium text-slate-400 mb-1 block pl-1">Destination</label>
-                <div className="flex items-center bg-input-dark rounded-xl px-4 h-12 border border-transparent focus-within:border-primary/50 transition-colors">
+                <div className="flex items-center bg-input-dark rounded-xl px-4 h-12 border border-slate-700/50 focus-within:border-primary/50 transition-colors">
                   <input 
                     className="bg-transparent border-none text-white placeholder-slate-500 text-sm font-medium w-full focus:ring-0 p-0" 
                     placeholder="Enter destination" 
@@ -218,22 +264,27 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
             </div>
             
             <button 
-              onClick={handleFindDriver}
-              disabled={isSearching}
-              className={`w-full ${isSearching ? 'bg-slate-600' : 'bg-primary hover:bg-blue-600 active:bg-blue-700'} text-white font-bold text-lg py-4 rounded-xl shadow-lg shadow-primary/25 flex items-center justify-center gap-2 transition-all transform active:scale-[0.98]`}
+              onClick={handleMainAction}
+              disabled={isSearching || !isScheduleValid}
+              className={`w-full ${isSearching ? 'bg-slate-600' : isScheduleValid ? 'bg-primary hover:bg-blue-600 active:bg-blue-700' : 'bg-slate-700 opacity-50 cursor-not-allowed'} text-white font-bold text-lg py-4 rounded-xl shadow-lg shadow-primary/25 flex items-center justify-center gap-2 transition-all transform active:scale-[0.98]`}
             >
               {isSearching ? (
                 <>
                   <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                  <span>Searching...</span>
+                  <span>{rideType === 'now' ? 'Searching...' : 'Scheduling...'}</span>
                 </>
               ) : (
                 <>
-                  <span>Find a Driver</span>
-                  <span className="material-symbols-outlined">arrow_forward</span>
+                  <span>{rideType === 'now' ? 'Find a Driver' : 'Confirm Schedule'}</span>
+                  <span className="material-symbols-outlined">{rideType === 'now' ? 'arrow_forward' : 'check_circle'}</span>
                 </>
               )}
             </button>
+            {!isScheduleValid && rideType === 'schedule' && (
+              <p className="text-center text-[11px] text-red-400 font-medium">
+                * Please select both date and time to continue
+              </p>
+            )}
           </div>
         </div>
       </div>
