@@ -1,9 +1,16 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { IMAGES } from '../constants';
 import { CapacitorService } from '../services/CapacitorService';
 import { GoogleGenAI } from "@google/genai";
-import { Config } from '../services/Config';
+import InteractiveMap from '../components/InteractiveMap';
+
+interface SearchResult {
+  display_name: string;
+  lat: string;
+  lon: string;
+  place_id: number;
+}
 
 interface RequestRideScreenProps {
   onOpenProfile: () => void;
@@ -13,35 +20,124 @@ interface RequestRideScreenProps {
 const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, onBack }) => {
   const [rideType, setRideType] = useState<'now' | 'schedule'>('now');
   const [isSearching, setIsSearching] = useState(false);
+  
   const [pickupLocation, setPickupLocation] = useState('Current Location');
+  const [pickupCoords, setPickupCoords] = useState<[number, number] | null>(null);
+  const [pickupResults, setPickupResults] = useState<SearchResult[]>([]);
+  
   const [destination, setDestination] = useState('');
+  const [destCoords, setDestCoords] = useState<[number, number] | null>(null);
+  const [destResults, setDestResults] = useState<SearchResult[]>([]);
+  
+  const [activeSearchField, setActiveSearchField] = useState<'pickup' | 'destination' | null>(null);
+  
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([6.5244, 3.3792]);
   const [scheduleData, setScheduleData] = useState({
     date: '',
     time: ''
   });
 
+  // Fix: use 'any' instead of 'NodeJS.Timeout' to avoid namespace error in browser environments
+  const searchTimeout = useRef<any>(null);
+
   const isScheduleValid = rideType === 'now' || (scheduleData.date && scheduleData.time);
+
+  const reverseGeocode = async (lat: number, lon: number) => {
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+      const data = await response.json();
+      return data.display_name || "Custom location";
+    } catch (error) {
+      console.error("Reverse geocode error:", error);
+      return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    }
+  };
 
   const handleGetLocation = async () => {
     CapacitorService.triggerHaptic();
     setPickupLocation('Fetching location...');
     const pos = await CapacitorService.getCurrentLocation();
     if (pos) {
-      setPickupLocation(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
+      const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+      setMapCenter(coords);
+      setPickupCoords(coords);
+      setPickupLocation(`Current Location (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`);
+      setActiveSearchField(null);
     } else {
       setPickupLocation('Location Error');
       setTimeout(() => setPickupLocation('Current Location'), 2000);
     }
   };
 
+  const searchPlaces = async (query: string, field: 'pickup' | 'destination') => {
+    if (query.length < 3) {
+      field === 'pickup' ? setPickupResults([]) : setDestResults([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=ng`);
+      const data = await response.json();
+      field === 'pickup' ? setPickupResults(data) : setDestResults(data);
+    } catch (error) {
+      console.error("Search error:", error);
+    }
+  };
+
+  const handleInputChange = (val: string, field: 'pickup' | 'destination') => {
+    if (field === 'pickup') {
+      setPickupLocation(val);
+      setActiveSearchField('pickup');
+    } else {
+      setDestination(val);
+      setActiveSearchField('destination');
+    }
+
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => {
+      searchPlaces(val, field);
+    }, 500);
+  };
+
+  const selectResult = (result: SearchResult, field: 'pickup' | 'destination') => {
+    const coords: [number, number] = [parseFloat(result.lat), parseFloat(result.lon)];
+    if (field === 'pickup') {
+      setPickupLocation(result.display_name);
+      setPickupCoords(coords);
+      setPickupResults([]);
+    } else {
+      setDestination(result.display_name);
+      setDestCoords(coords);
+      setDestResults([]);
+    }
+    setMapCenter(coords);
+    setActiveSearchField(null);
+    CapacitorService.triggerHaptic();
+  };
+
+  const handleMarkerDragEnd = async (id: string, newPos: [number, number]) => {
+    CapacitorService.triggerHaptic();
+    const address = await reverseGeocode(newPos[0], newPos[1]);
+    
+    if (id === 'pickup') {
+      setPickupCoords(newPos);
+      setPickupLocation(address);
+    } else {
+      setDestCoords(newPos);
+      setDestination(address);
+    }
+  };
+
   const getAiInsight = async (dest: string) => {
-    if (!dest || dest.length < 3 || !Config.apiKey) return;
+    // Fix: access API_KEY directly from process.env as per guidelines
+    if (!dest || dest.length < 3 || !process.env.API_KEY) return;
     
     setIsAiLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: Config.apiKey });
+      // Fix: initialize GoogleGenAI with process.env.API_KEY directly and right before usage
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Provide a very short (max 15 words) helpful travel tip or traffic insight for a car trip to: ${dest} in the context of Lagos, Nigeria. Be professional and concise.`,
@@ -57,10 +153,15 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (destination) getAiInsight(destination);
+      if (destination && !activeSearchField) getAiInsight(destination);
     }, 1200);
     return () => clearTimeout(timer);
-  }, [destination]);
+  }, [destination, activeSearchField]);
+
+  // Initial location fetch
+  useEffect(() => {
+    handleGetLocation();
+  }, []);
 
   const handleMainAction = () => {
     CapacitorService.triggerHaptic();
@@ -84,27 +185,24 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     }
   };
 
+  const mapMarkers: any[] = [];
+  if (pickupCoords) mapMarkers.push({ id: 'pickup', position: pickupCoords, title: 'Pick-up (Drag to move)', icon: 'user', draggable: true });
+  if (destCoords) mapMarkers.push({ id: 'destination', position: destCoords, title: 'Destination (Drag to move)', icon: 'destination', draggable: true });
+
   return (
     <div className="h-screen w-full overflow-hidden flex flex-col relative bg-background-dark">
+      {/* Interactive Map Component */}
       <div className="absolute inset-0 z-0">
-        <div className="w-full h-full bg-slate-800 relative overflow-hidden">
-          <img 
-            alt="Dark themed map" 
-            className="w-full h-full object-cover opacity-60 mix-blend-overlay" 
-            src={IMAGES.MAP_BG}
-          />
-          <div className="absolute inset-0 bg-[#101622]/40 backdrop-grayscale-[0.5]"></div>
-          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-            <div className="bg-primary/20 p-2 rounded-full animate-pulse">
-              <div className="bg-primary text-white p-2 rounded-full shadow-lg shadow-primary/40">
-                <span className="material-symbols-outlined text-[24px]">local_taxi</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <InteractiveMap 
+          center={mapCenter} 
+          markers={mapMarkers} 
+          onMarkerDragEnd={handleMarkerDragEnd}
+        />
+        {/* Gradients to blend map */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#101622]/60 via-transparent to-[#101622]/90 pointer-events-none"></div>
       </div>
 
-      <div className="relative z-10 flex items-center justify-between p-4 pt-8 pb-4 bg-gradient-to-b from-background-dark/90 to-transparent">
+      <div className="relative z-30 flex items-center justify-between p-4 pt-8 pb-4 bg-gradient-to-b from-background-dark/90 to-transparent">
         <button 
           onClick={onBack}
           className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg hover:bg-surface-dark transition-colors active:scale-95"
@@ -182,11 +280,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
                   </div>
                 </div>
               </div>
-              {scheduleData.date && scheduleData.time && (
-                <p className="text-[11px] text-primary/80 font-medium italic">
-                  Trip scheduled for {new Date(scheduleData.date).toLocaleDateString()} at {scheduleData.time}.
-                </p>
-              )}
             </div>
           )}
 
@@ -198,6 +291,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
             </div>
 
             <div className="flex flex-col gap-4 flex-1">
+              {/* Pickup Field */}
               <div className="group relative">
                 <label className="text-xs font-medium text-slate-400 mb-1 block pl-1">Pick-up Location</label>
                 <div className="flex items-center bg-input-dark rounded-xl px-4 h-12 border border-slate-700/50 focus-within:border-primary/50 transition-colors">
@@ -206,14 +300,30 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
                     placeholder="Where are you?" 
                     type="text" 
                     value={pickupLocation}
-                    onChange={(e) => setPickupLocation(e.target.value)}
+                    onChange={(e) => handleInputChange(e.target.value, 'pickup')}
+                    onFocus={() => setActiveSearchField('pickup')}
                   />
                   <button onClick={handleGetLocation} className="active:scale-90 p-1">
                     <span className="material-symbols-outlined text-primary text-[20px]">my_location</span>
                   </button>
                 </div>
+                {activeSearchField === 'pickup' && pickupResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-input-dark rounded-xl border border-slate-700/50 shadow-2xl z-50 overflow-hidden max-h-48 overflow-y-auto">
+                    {pickupResults.map((res) => (
+                      <button 
+                        key={res.place_id}
+                        onClick={() => selectResult(res, 'pickup')}
+                        className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-slate-700/50 border-b border-slate-700/30 last:border-0 flex items-center gap-3"
+                      >
+                        <span className="material-symbols-outlined text-slate-500 text-[18px]">location_on</span>
+                        <span className="truncate">{res.display_name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
+              {/* Destination Field */}
               <div className="group relative">
                 <label className="text-xs font-medium text-slate-400 mb-1 block pl-1">Destination</label>
                 <div className="flex items-center bg-input-dark rounded-xl px-4 h-12 border border-slate-700/50 focus-within:border-primary/50 transition-colors">
@@ -222,17 +332,32 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
                     placeholder="Enter destination" 
                     type="text" 
                     value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
+                    onChange={(e) => handleInputChange(e.target.value, 'destination')}
+                    onFocus={() => setActiveSearchField('destination')}
                   />
                   <span className={`material-symbols-outlined text-[20px] ml-2 transition-colors ${isAiLoading ? 'text-primary animate-pulse' : 'text-slate-500'}`}>
                     {isAiLoading ? 'auto_awesome' : 'search'}
                   </span>
                 </div>
+                {activeSearchField === 'destination' && destResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-input-dark rounded-xl border border-slate-700/50 shadow-2xl z-50 overflow-hidden max-h-48 overflow-y-auto">
+                    {destResults.map((res) => (
+                      <button 
+                        key={res.place_id}
+                        onClick={() => selectResult(res, 'destination')}
+                        className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-slate-700/50 border-b border-slate-700/30 last:border-0 flex items-center gap-3"
+                      >
+                        <span className="material-symbols-outlined text-slate-500 text-[18px]">map</span>
+                        <span className="truncate">{res.display_name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          {(aiInsight || isAiLoading) && (
+          {(aiInsight || isAiLoading) && !activeSearchField && (
             <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex gap-3 animate-in fade-in slide-in-from-top-2 duration-500">
               <span className={`material-symbols-outlined text-primary text-[20px] shrink-0 ${isAiLoading ? 'animate-spin' : ''}`}>
                 {isAiLoading ? 'progress_activity' : 'auto_awesome'}
@@ -279,11 +404,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
                 </>
               )}
             </button>
-            {!isScheduleValid && rideType === 'schedule' && (
-              <p className="text-center text-[11px] text-red-400 font-medium">
-                * Please select both date and time to continue
-              </p>
-            )}
           </div>
         </div>
       </div>
