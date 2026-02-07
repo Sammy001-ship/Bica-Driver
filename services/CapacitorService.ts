@@ -42,13 +42,13 @@ export const CapacitorService = {
     }
   },
 
-  async takePhoto(): Promise<string | null> {
+  async takePhoto(source: CameraSource = CameraSource.Prompt): Promise<string | null> {
     try {
       const image = await Camera.getPhoto({
         quality: 90,
         allowEditing: true,
         resultType: CameraResultType.Base64,
-        source: CameraSource.Prompt // Prompt allows user to choose between Camera or Gallery (Upload)
+        source: source
       });
       return `data:image/jpeg;base64,${image.base64String}`;
     } catch (e) {
@@ -59,6 +59,11 @@ export const CapacitorService = {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
+        // If source is Camera, we try to hint to use camera
+        if (source === CameraSource.Camera) {
+          (input as any).capture = 'environment';
+        }
+        
         input.onchange = (event: any) => {
           const file = event.target.files[0];
           if (!file) {
@@ -77,13 +82,12 @@ export const CapacitorService = {
     }
   },
 
-  /**
-   * Triggers haptic feedback.
-   * Implementation is currently disabled to ensure silent interaction as requested.
-   */
   async triggerHaptic() {
-    // Disabled to ensure no sound/vibration feedback during clicks
-    return;
+    try {
+      await Haptics.impact({ style: ImpactStyle.Medium });
+    } catch (e) {
+      // Ignore if not supported
+    }
   },
 
   async initStatusBar() {

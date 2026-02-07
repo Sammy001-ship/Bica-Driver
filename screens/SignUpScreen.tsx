@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { UserRole, UserProfile } from '../types';
 import { CapacitorService } from '../services/CapacitorService';
+import { CameraSource } from '@capacitor/camera';
 
 interface SignUpScreenProps {
   role: UserRole;
@@ -23,11 +24,13 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ role, onSignUp, onBack, onG
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isCapturing, setIsCapturing] = useState<'license' | 'selfie' | null>(null);
+  const [showSourceSelector, setShowSourceSelector] = useState<'license' | 'selfie' | null>(null);
 
-  const handleCapture = async (type: 'license' | 'selfie') => {
+  const handleCapture = async (type: 'license' | 'selfie', source: CameraSource) => {
+    setShowSourceSelector(null);
     setIsCapturing(type);
     try {
-      const photo = await CapacitorService.takePhoto();
+      const photo = await CapacitorService.takePhoto(source);
       if (photo) {
         setFormData(prev => ({ ...prev, [type === 'license' ? 'licenseImage' : 'selfieImage']: photo }));
       }
@@ -67,7 +70,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ role, onSignUp, onBack, onG
   const isDriver = role === UserRole.DRIVER;
 
   return (
-    <div className="flex h-screen w-full flex-col bg-background-light dark:bg-background-dark">
+    <div className="flex h-screen w-full flex-col bg-background-light dark:bg-background-dark relative">
       <header className="flex items-center justify-between px-4 py-3 sticky top-0 z-50 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md">
         <button 
           onClick={onBack}
@@ -160,7 +163,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ role, onSignUp, onBack, onG
               <div className="grid grid-cols-2 gap-3">
                 <button 
                   type="button"
-                  onClick={() => handleCapture('license')}
+                  onClick={() => setShowSourceSelector('license')}
                   className={`flex flex-col items-center justify-center gap-2 h-40 rounded-2xl border-2 border-dashed transition-all relative overflow-hidden group ${
                     formData.licenseImage ? 'border-green-500 bg-green-500/5' : 'border-slate-300 dark:border-slate-800 bg-white dark:bg-input-dark hover:border-primary'
                   }`}
@@ -180,13 +183,13 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ role, onSignUp, onBack, onG
                         <span className="material-symbols-outlined text-2xl">badge</span>
                       </div>
                       <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">Driver License</span>
-                      <span className="text-[9px] text-primary font-bold">Upload or Take Photo</span>
+                      <span className="text-[9px] text-primary font-bold">Tap to Add</span>
                     </>
                   )}
                 </button>
                 <button 
                   type="button"
-                  onClick={() => handleCapture('selfie')}
+                  onClick={() => setShowSourceSelector('selfie')}
                   className={`flex flex-col items-center justify-center gap-2 h-40 rounded-2xl border-2 border-dashed transition-all relative overflow-hidden group ${
                     formData.selfieImage ? 'border-green-500 bg-green-500/5' : 'border-slate-300 dark:border-slate-800 bg-white dark:bg-input-dark hover:border-primary'
                   }`}
@@ -206,7 +209,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ role, onSignUp, onBack, onG
                         <span className="material-symbols-outlined text-2xl">photo_camera</span>
                       </div>
                       <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">Profile Selfie</span>
-                      <span className="text-[9px] text-primary font-bold">Take Selfie</span>
+                      <span className="text-[9px] text-primary font-bold">Tap to Capture</span>
                     </>
                   )}
                 </button>
@@ -273,6 +276,53 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ role, onSignUp, onBack, onG
           </span>
         </p>
       </footer>
+
+      {/* Immediate Source Selection Modal */}
+      {showSourceSelector && (
+        <div 
+          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end justify-center p-4 animate-fade-in"
+          onClick={() => setShowSourceSelector(null)}
+        >
+          <div 
+            className="w-full max-w-md bg-white dark:bg-surface-dark rounded-[2rem] p-6 shadow-2xl animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center gap-6">
+              <div className="h-1 w-12 bg-slate-200 dark:bg-slate-700 rounded-full mb-2"></div>
+              <h3 className="text-xl font-bold">Select Image Source</h3>
+              
+              <div className="grid grid-cols-2 gap-4 w-full">
+                <button 
+                  onClick={() => handleCapture(showSourceSelector, CameraSource.Camera)}
+                  className="flex flex-col items-center justify-center gap-3 p-6 rounded-3xl bg-primary/5 border border-primary/10 hover:bg-primary/10 transition-colors group active:scale-95"
+                >
+                  <div className="w-16 h-16 rounded-2xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/20 group-hover:scale-110 transition-transform">
+                    <span className="material-symbols-outlined text-3xl">photo_camera</span>
+                  </div>
+                  <span className="font-bold text-sm">Take Photo</span>
+                </button>
+                
+                <button 
+                  onClick={() => handleCapture(showSourceSelector, CameraSource.Photos)}
+                  className="flex flex-col items-center justify-center gap-3 p-6 rounded-3xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 transition-colors group active:scale-95"
+                >
+                  <div className="w-16 h-16 rounded-2xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <span className="material-symbols-outlined text-3xl">image</span>
+                  </div>
+                  <span className="font-bold text-sm">From Gallery</span>
+                </button>
+              </div>
+
+              <button 
+                onClick={() => setShowSourceSelector(null)}
+                className="w-full py-4 text-slate-500 font-bold hover:text-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
