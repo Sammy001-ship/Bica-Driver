@@ -42,18 +42,38 @@ export const CapacitorService = {
     }
   },
 
-  async takePhoto() {
+  async takePhoto(): Promise<string | null> {
     try {
       const image = await Camera.getPhoto({
         quality: 90,
         allowEditing: true,
         resultType: CameraResultType.Base64,
-        source: CameraSource.Prompt
+        source: CameraSource.Prompt // Prompt allows user to choose between Camera or Gallery (Upload)
       });
       return `data:image/jpeg;base64,${image.base64String}`;
     } catch (e) {
-      console.warn('Capacitor Camera failed. In a real environment, check permissions.', e);
-      return null;
+      console.warn('Capacitor Camera failed or cancelled. Using web fallback...', e);
+      
+      // Web fallback using <input type="file"> to allow "Upload"
+      return new Promise((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (event: any) => {
+          const file = event.target.files[0];
+          if (!file) {
+            resolve(null);
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = (e: any) => {
+            resolve(e.target.result as string);
+          };
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(file);
+        };
+        input.click();
+      });
     }
   },
 

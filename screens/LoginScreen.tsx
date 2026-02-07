@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 
 interface LoginScreenProps {
-  onLogin: () => void;
+  onLogin: (email: string) => void;
   onBack: () => void;
   onGoToSignUp: () => void;
 }
@@ -16,8 +16,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onBack, onGoToSignUp
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate API call
-    onLogin();
+    // Pass the email to the login handler
+    onLogin(formData.email);
   };
 
   return (

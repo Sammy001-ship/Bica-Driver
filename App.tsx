@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { AppScreen, UserRole, UserProfile } from './types';
+import { AppScreen, UserRole, UserProfile, ApprovalStatus } from './types';
 import WelcomeScreen from './screens/WelcomeScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -8,23 +8,41 @@ import RoleSelectionScreen from './screens/RoleSelectionScreen';
 import RequestRideScreen from './screens/RequestRideScreen';
 import DriverMainScreen from './screens/DriverMainScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import AdminDashboardScreen from './screens/AdminDashboardScreen';
 import { IMAGES } from './constants';
 import { CapacitorService } from './services/CapacitorService';
 
-const MOCK_USER: UserProfile = {
-  name: "Alex Morgan",
-  email: "alex.morgan@email.com",
-  phone: "+1 (555) 019-2834",
-  rating: 4.9,
-  trips: 240,
-  avatar: IMAGES.USER_AVATAR
-};
+const MOCK_USERS: UserProfile[] = [
+  {
+    id: '1',
+    name: "Alex Morgan",
+    email: "alex.morgan@email.com",
+    phone: "+1 (555) 019-2834",
+    role: UserRole.OWNER,
+    rating: 4.9,
+    trips: 240,
+    avatar: IMAGES.USER_AVATAR,
+    carType: "Mercedes S-Class"
+  },
+  {
+    id: '2',
+    name: "John Driver",
+    email: "john@bicadriver.com",
+    phone: "+234 801 234 5678",
+    role: UserRole.DRIVER,
+    rating: 0,
+    trips: 0,
+    avatar: IMAGES.DRIVER_CARD,
+    approvalStatus: 'PENDING',
+    backgroundCheckAccepted: true
+  }
+];
 
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.WELCOME);
-  const [userRole, setUserRole] = useState<UserRole>(UserRole.UNSET);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userProfile, setUserProfile] = useState<UserProfile>(MOCK_USER);
+  const [selectedSignupRole, setSelectedSignupRole] = useState<UserRole>(UserRole.UNSET);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>(MOCK_USERS);
 
   useEffect(() => {
     CapacitorService.initStatusBar();
@@ -35,85 +53,110 @@ const App: React.FC = () => {
     setCurrentScreen(screen);
   };
 
-  const handleCreateAccount = () => navigateTo(AppScreen.SIGN_UP);
-  const handleGoToLogin = () => navigateTo(AppScreen.LOGIN);
-
-  const handleAuthComplete = () => {
-    setIsLoggedIn(true);
-    navigateTo(AppScreen.ROLE_SELECTION);
+  const handleStart = () => navigateTo(AppScreen.ROLE_SELECTION);
+  
+  const handleRoleSelect = (role: UserRole) => {
+    setSelectedSignupRole(role);
+    navigateTo(AppScreen.SIGN_UP);
   };
 
-  const handleRoleSelect = (role: UserRole) => {
-    setUserRole(role);
-    if (role === UserRole.DRIVER) {
+  const handleSignUpComplete = (userData: Partial<UserProfile>) => {
+    const newUser: UserProfile = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: userData.name || '',
+      email: userData.email || '',
+      phone: userData.phone || '',
+      role: selectedSignupRole,
+      rating: 0,
+      trips: 0,
+      avatar: userData.avatar || (selectedSignupRole === UserRole.DRIVER ? IMAGES.DRIVER_CARD : IMAGES.USER_AVATAR),
+      carType: userData.carType,
+      licenseImage: userData.licenseImage,
+      selfieImage: userData.selfieImage,
+      backgroundCheckAccepted: userData.backgroundCheckAccepted,
+      approvalStatus: selectedSignupRole === UserRole.DRIVER ? 'PENDING' : 'APPROVED'
+    };
+
+    setAllUsers([...allUsers, newUser]);
+    setCurrentUser(newUser);
+    
+    if (newUser.role === UserRole.DRIVER) {
       navigateTo(AppScreen.DRIVER_DASHBOARD);
     } else {
       navigateTo(AppScreen.MAIN_REQUEST);
     }
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserRole(UserRole.UNSET);
-    navigateTo(AppScreen.WELCOME);
+  const handleLogin = (email?: string) => {
+    if (!email) {
+      alert("Please enter an email address.");
+      return;
+    }
+
+    // Basic mock login - find user by email with safety checks
+    const user = allUsers.find(u => {
+      if (!u.email) return false;
+      return u.email.toLowerCase() === email.toLowerCase();
+    });
+
+    if (user) {
+      setCurrentUser(user);
+      if (user.role === UserRole.DRIVER) {
+        navigateTo(AppScreen.DRIVER_DASHBOARD);
+      } else if (user.role === UserRole.OWNER) {
+        navigateTo(AppScreen.MAIN_REQUEST);
+      }
+    } else if (email.toLowerCase() === 'admin@bicadriver.com') {
+      navigateTo(AppScreen.ADMIN_DASHBOARD);
+    } else {
+      alert("User not found in demo. Try 'john@bicadriver.com' or 'alex.morgan@email.com'");
+    }
   };
 
-  const handleUpdateAvatar = (newAvatar: string) => {
-    setUserProfile({ ...userProfile, avatar: newAvatar });
+  const handleUpdateDriverStatus = (userId: string, status: ApprovalStatus) => {
+    const updatedUsers = allUsers.map(u => 
+      u.id === userId ? { ...u, approvalStatus: status } : u
+    );
+    setAllUsers(updatedUsers);
+    
+    // Update current user if it's the one being modified
+    if (currentUser && currentUser.id === userId) {
+      setCurrentUser({ ...currentUser, approvalStatus: status });
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    navigateTo(AppScreen.WELCOME);
   };
 
   const renderScreen = () => {
     switch (currentScreen) {
       case AppScreen.WELCOME:
-        return <WelcomeScreen onCreateAccount={handleCreateAccount} onLogin={handleGoToLogin} />;
-      case AppScreen.SIGN_UP:
-        return <SignUpScreen onSignUp={handleAuthComplete} onBack={() => navigateTo(AppScreen.WELCOME)} onGoToLogin={handleGoToLogin} />;
-      case AppScreen.LOGIN:
-        return <LoginScreen onLogin={handleAuthComplete} onBack={() => navigateTo(AppScreen.WELCOME)} onGoToSignUp={handleCreateAccount} />;
+        return <WelcomeScreen onCreateAccount={handleStart} onLogin={() => navigateTo(AppScreen.LOGIN)} onAdminMode={() => navigateTo(AppScreen.ADMIN_DASHBOARD)} />;
       case AppScreen.ROLE_SELECTION:
-        return <RoleSelectionScreen onSelectRole={handleRoleSelect} onBack={() => navigateTo(AppScreen.WELCOME)} onGoToLogin={handleGoToLogin} />;
+        return <RoleSelectionScreen onSelectRole={handleRoleSelect} onBack={() => navigateTo(AppScreen.WELCOME)} onGoToLogin={() => navigateTo(AppScreen.LOGIN)} />;
+      case AppScreen.SIGN_UP:
+        return <SignUpScreen role={selectedSignupRole} onSignUp={handleSignUpComplete} onBack={() => navigateTo(AppScreen.ROLE_SELECTION)} onGoToLogin={() => navigateTo(AppScreen.LOGIN)} />;
+      case AppScreen.LOGIN:
+        return <LoginScreen onLogin={handleLogin} onBack={() => navigateTo(AppScreen.WELCOME)} onGoToSignUp={handleStart} />;
       case AppScreen.MAIN_REQUEST:
-        return (
-          <RequestRideScreen 
-            onOpenProfile={() => navigateTo(AppScreen.PROFILE)} 
-            onBack={() => navigateTo(AppScreen.ROLE_SELECTION)}
-          />
-        );
+        return <RequestRideScreen onOpenProfile={() => navigateTo(AppScreen.PROFILE)} onBack={handleLogout} />;
       case AppScreen.DRIVER_DASHBOARD:
-        return (
-          <DriverMainScreen 
-            onOpenProfile={() => navigateTo(AppScreen.PROFILE)} 
-            onBack={() => navigateTo(AppScreen.ROLE_SELECTION)}
-          />
-        );
+        return <DriverMainScreen user={currentUser} onOpenProfile={() => navigateTo(AppScreen.PROFILE)} onBack={handleLogout} />;
       case AppScreen.PROFILE:
-        return (
-          <ProfileScreen 
-            user={userProfile} 
-            initialRole={userRole} 
-            onBack={() => {
-              if (userRole === UserRole.DRIVER) {
-                navigateTo(AppScreen.DRIVER_DASHBOARD);
-              } else {
-                navigateTo(AppScreen.MAIN_REQUEST);
-              }
-            }} 
-            onLogout={handleLogout}
-            onUpdateAvatar={handleUpdateAvatar}
-          />
-        );
+        return <ProfileScreen user={currentUser!} initialRole={currentUser!.role} onBack={() => currentUser!.role === UserRole.DRIVER ? navigateTo(AppScreen.DRIVER_DASHBOARD) : navigateTo(AppScreen.MAIN_REQUEST)} onLogout={handleLogout} onUpdateAvatar={(a) => setCurrentUser({...currentUser!, avatar: a})} />;
+      case AppScreen.ADMIN_DASHBOARD:
+        return <AdminDashboardScreen users={allUsers} onUpdateStatus={handleUpdateDriverStatus} onBack={() => navigateTo(AppScreen.WELCOME)} />;
       default:
-        return <WelcomeScreen onCreateAccount={handleCreateAccount} onLogin={handleGoToLogin} />;
+        return <WelcomeScreen onCreateAccount={handleStart} onLogin={() => navigateTo(AppScreen.LOGIN)} onAdminMode={() => navigateTo(AppScreen.ADMIN_DASHBOARD)} />;
     }
   };
 
   return (
     <div className="flex justify-center items-start min-h-screen bg-slate-950">
       <div className="w-full max-w-md min-h-screen bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden relative">
-        <div 
-          key={currentScreen} 
-          className="h-full w-full screen-transition overflow-hidden"
-        >
+        <div key={currentScreen} className="h-full w-full screen-transition overflow-hidden">
           {renderScreen()}
         </div>
       </div>

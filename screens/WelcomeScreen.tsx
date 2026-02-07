@@ -5,9 +5,10 @@ import { IMAGES } from '../constants';
 interface WelcomeScreenProps {
   onCreateAccount: () => void;
   onLogin: () => void;
+  onAdminMode?: () => void;
 }
 
-const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onCreateAccount, onLogin }) => {
+const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onCreateAccount, onLogin, onAdminMode }) => {
   return (
     <div className="relative h-screen flex flex-col bg-background-light dark:bg-background-dark overflow-hidden">
       <div className="absolute top-[-20%] left-[-20%] w-[140%] h-[60%] rounded-full bg-primary/10 blur-[100px] pointer-events-none animate-fade-in"></div>
@@ -54,12 +55,6 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onCreateAccount, onLogin 
             The elite connection for luxury car owners and verified chauffeurs. Safety and comfort guaranteed.
           </p>
         </div>
-
-        <div className="flex gap-2.5 mt-10 mb-4 animate-fade-in stagger-3 opacity-0" style={{ animationFillMode: 'forwards' }}>
-          <div className="w-8 h-2 rounded-full bg-primary transition-all shadow-md shadow-primary/20"></div>
-          <div className="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-700"></div>
-          <div className="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-700"></div>
-        </div>
       </div>
 
       <div className="w-full p-6 pb-12 flex flex-col gap-4 z-20 animate-slide-up stagger-3 opacity-0" style={{ animationFillMode: 'forwards' }}>
@@ -75,9 +70,19 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onCreateAccount, onLogin 
         >
           Sign In
         </button>
-        <p className="text-[11px] text-center text-gray-500 dark:text-slate-500 mt-2 font-medium tracking-tight">
-          By continuing, you agree to our <span className="text-primary font-bold cursor-pointer hover:underline">Terms</span> & <span className="text-primary font-bold cursor-pointer hover:underline">Privacy</span>.
-        </p>
+        <div className="flex items-center justify-center gap-4 mt-2">
+          <p className="text-[11px] text-gray-500 dark:text-slate-500 font-medium tracking-tight">
+            By continuing, you agree to our <span className="text-primary font-bold cursor-pointer hover:underline">Terms</span>.
+          </p>
+          {onAdminMode && (
+            <button 
+              onClick={onAdminMode} 
+              className="text-[11px] text-primary/40 hover:text-primary font-bold transition-colors"
+            >
+              Admin Panel
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

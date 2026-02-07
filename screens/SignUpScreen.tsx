@@ -1,50 +1,99 @@
 
 import React, { useState } from 'react';
+import { UserRole, UserProfile } from '../types';
+import { CapacitorService } from '../services/CapacitorService';
 
 interface SignUpScreenProps {
-  onSignUp: () => void;
+  role: UserRole;
+  onSignUp: (userData: Partial<UserProfile>) => void;
   onBack: () => void;
   onGoToLogin: () => void;
 }
 
-const SignUpScreen: React.FC<SignUpScreenProps> = ({ onSignUp, onBack, onGoToLogin }) => {
+const SignUpScreen: React.FC<SignUpScreenProps> = ({ role, onSignUp, onBack, onGoToLogin }) => {
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     phone: '',
-    password: ''
+    password: '',
+    carType: '',
+    licenseImage: '',
+    selfieImage: '',
+    backgroundCheckAccepted: false
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [isCapturing, setIsCapturing] = useState<'license' | 'selfie' | null>(null);
+
+  const handleCapture = async (type: 'license' | 'selfie') => {
+    setIsCapturing(type);
+    try {
+      const photo = await CapacitorService.takePhoto();
+      if (photo) {
+        setFormData(prev => ({ ...prev, [type === 'license' ? 'licenseImage' : 'selfieImage']: photo }));
+      }
+    } finally {
+      setIsCapturing(null);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate API call
-    onSignUp();
+    
+    // Simple validation
+    if (role === UserRole.DRIVER) {
+      if (!formData.licenseImage || !formData.selfieImage || !formData.backgroundCheckAccepted) {
+        alert("Please complete all driver requirements including documents and background check.");
+        return;
+      }
+    } else {
+      if (!formData.carType) {
+        alert("Please specify your car type.");
+        return;
+      }
+    }
+
+    onSignUp({
+      name: formData.fullName,
+      email: formData.email,
+      phone: formData.phone,
+      carType: formData.carType,
+      licenseImage: formData.licenseImage,
+      selfieImage: formData.selfieImage,
+      backgroundCheckAccepted: formData.backgroundCheckAccepted,
+      avatar: formData.selfieImage // Use selfie as avatar for drivers
+    });
   };
+
+  const isDriver = role === UserRole.DRIVER;
 
   return (
     <div className="flex h-screen w-full flex-col bg-background-light dark:bg-background-dark">
-      <header className="flex items-center justify-between px-4 py-3 sticky top-0 z-10 bg-background-light dark:bg-background-dark">
+      <header className="flex items-center justify-between px-4 py-3 sticky top-0 z-50 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md">
         <button 
           onClick={onBack}
           className="flex size-10 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors active:scale-90"
         >
           <span className="material-symbols-outlined text-slate-900 dark:text-white">arrow_back</span>
         </button>
-        <h1 className="text-lg font-bold leading-tight tracking-tight text-center">Create Account</h1>
+        <h1 className="text-lg font-bold leading-tight tracking-tight text-center">
+          {isDriver ? 'Driver Registration' : 'Owner Registration'}
+        </h1>
         <div className="size-10"></div>
       </header>
 
       <main className="flex-1 flex flex-col px-6 pt-4 pb-8 w-full overflow-y-auto no-scrollbar">
-        <div className="flex flex-col mb-8">
-          <h2 className="text-[28px] font-bold leading-tight mb-2">Join Bicadriver</h2>
+        <div className="flex flex-col mb-8 animate-slide-up">
+          <h2 className="text-[28px] font-bold leading-tight mb-2">
+            {isDriver ? 'Become a Driver' : 'Register Your Car'}
+          </h2>
           <p className="text-slate-500 dark:text-slate-400 text-base">
-            Start your journey with us today.
+            {isDriver ? 'Start earning by driving luxury cars.' : 'Hire professional drivers for your vehicle.'}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5 w-full">
-          <div className="flex flex-col gap-1.5">
+          {/* Common Fields */}
+          <div className="flex flex-col gap-1.5 animate-slide-up stagger-1 opacity-0" style={{ animationFillMode: 'forwards' }}>
             <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Full Name</label>
             <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-4 h-14 border border-slate-200 dark:border-slate-800 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all">
               <span className="material-symbols-outlined text-slate-400 mr-3">person</span>
@@ -59,7 +108,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ onSignUp, onBack, onGoToLog
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 animate-slide-up stagger-1 opacity-0" style={{ animationFillMode: 'forwards' }}>
             <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Email Address</label>
             <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-4 h-14 border border-slate-200 dark:border-slate-800 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all">
               <span className="material-symbols-outlined text-slate-400 mr-3">mail</span>
@@ -74,7 +123,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ onSignUp, onBack, onGoToLog
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
             <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Phone Number</label>
             <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-4 h-14 border border-slate-200 dark:border-slate-800 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all">
               <span className="material-symbols-outlined text-slate-400 mr-3">phone_iphone</span>
@@ -89,7 +138,97 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ onSignUp, onBack, onGoToLog
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          {/* Role Specific Fields */}
+          {!isDriver ? (
+            <div className="flex flex-col gap-1.5 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Type of Car</label>
+              <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-4 h-14 border border-slate-200 dark:border-slate-800 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all">
+                <span className="material-symbols-outlined text-slate-400 mr-3">directions_car</span>
+                <input 
+                  required
+                  className="bg-transparent border-none text-slate-900 dark:text-white placeholder-slate-400 text-base font-medium w-full focus:ring-0 p-0" 
+                  placeholder="e.g. Mercedes S-Class, BMW 7 Series" 
+                  type="text" 
+                  value={formData.carType}
+                  onChange={(e) => setFormData({...formData, carType: e.target.value})}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1 mb-[-8px]">Required Credentials</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  type="button"
+                  onClick={() => handleCapture('license')}
+                  className={`flex flex-col items-center justify-center gap-2 h-40 rounded-2xl border-2 border-dashed transition-all relative overflow-hidden group ${
+                    formData.licenseImage ? 'border-green-500 bg-green-500/5' : 'border-slate-300 dark:border-slate-800 bg-white dark:bg-input-dark hover:border-primary'
+                  }`}
+                >
+                  {isCapturing === 'license' ? (
+                    <span className="material-symbols-outlined animate-spin text-primary">progress_activity</span>
+                  ) : formData.licenseImage ? (
+                    <>
+                      <img src={formData.licenseImage} className="w-full h-full object-cover" alt="License" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">Update</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="bg-primary/10 text-primary w-12 h-12 rounded-full flex items-center justify-center mb-1">
+                        <span className="material-symbols-outlined text-2xl">badge</span>
+                      </div>
+                      <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">Driver License</span>
+                      <span className="text-[9px] text-primary font-bold">Upload or Take Photo</span>
+                    </>
+                  )}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => handleCapture('selfie')}
+                  className={`flex flex-col items-center justify-center gap-2 h-40 rounded-2xl border-2 border-dashed transition-all relative overflow-hidden group ${
+                    formData.selfieImage ? 'border-green-500 bg-green-500/5' : 'border-slate-300 dark:border-slate-800 bg-white dark:bg-input-dark hover:border-primary'
+                  }`}
+                >
+                   {isCapturing === 'selfie' ? (
+                    <span className="material-symbols-outlined animate-spin text-primary">progress_activity</span>
+                  ) : formData.selfieImage ? (
+                    <>
+                      <img src={formData.selfieImage} className="w-full h-full object-cover" alt="Selfie" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">Update</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="bg-primary/10 text-primary w-12 h-12 rounded-full flex items-center justify-center mb-1">
+                        <span className="material-symbols-outlined text-2xl">photo_camera</span>
+                      </div>
+                      <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">Profile Selfie</span>
+                      <span className="text-[9px] text-primary font-bold">Take Selfie</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex items-start gap-3 p-4 rounded-2xl bg-primary/5 border border-primary/10">
+                <input 
+                  type="checkbox" 
+                  id="bg-check"
+                  required
+                  checked={formData.backgroundCheckAccepted}
+                  onChange={(e) => setFormData({...formData, backgroundCheckAccepted: e.target.checked})}
+                  className="mt-1 rounded border-slate-300 dark:border-slate-700 bg-transparent text-primary focus:ring-primary cursor-pointer" 
+                />
+                <label htmlFor="bg-check" className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium cursor-pointer">
+                  I consent to a professional driver background check. This includes driving record and criminal history verification.
+                </label>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1.5 animate-slide-up stagger-3 opacity-0" style={{ animationFillMode: 'forwards' }}>
             <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Password</label>
             <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-4 h-14 border border-slate-200 dark:border-slate-800 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all">
               <span className="material-symbols-outlined text-slate-400 mr-3">lock</span>
@@ -113,32 +252,22 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ onSignUp, onBack, onGoToLog
             </div>
           </div>
 
-          <div className="flex items-start gap-3 mt-2 px-1">
-            <input 
-              type="checkbox" 
-              required
-              className="mt-1 rounded border-slate-300 dark:border-slate-700 bg-transparent text-primary focus:ring-primary" 
-            />
-            <p className="text-xs text-slate-500 leading-relaxed">
-              I agree to the <span className="text-primary font-semibold">Terms of Service</span> and <span className="text-primary font-semibold">Privacy Policy</span>.
-            </p>
-          </div>
-
           <button 
             type="submit"
-            className="w-full bg-primary hover:bg-blue-600 active:bg-blue-700 text-white font-bold text-lg h-14 rounded-xl shadow-lg shadow-primary/25 mt-4 transition-all transform active:scale-[0.98]"
+            className="w-full bg-primary hover:bg-blue-600 active:bg-blue-700 text-white font-bold text-lg h-16 rounded-xl shadow-lg shadow-primary/25 mt-4 transition-all transform active:scale-[0.98] animate-slide-up stagger-3 opacity-0"
+            style={{ animationFillMode: 'forwards' }}
           >
-            Sign Up
+            Complete Registration
           </button>
         </form>
       </main>
 
-      <footer className="p-6 text-center">
+      <footer className="p-6 text-center animate-fade-in stagger-3 opacity-0" style={{ animationFillMode: 'forwards' }}>
         <p className="text-slate-500 dark:text-slate-400 text-sm">
           Already have an account? 
           <span 
             onClick={onGoToLogin}
-            className="text-primary font-bold hover:underline ml-1 cursor-pointer"
+            className="text-primary font-bold hover:underline ml-1 cursor-pointer transition-colors"
           >
             Log In
           </span>
