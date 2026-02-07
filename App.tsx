@@ -93,17 +93,20 @@ const App: React.FC = () => {
       return;
     }
 
-    // Basic mock login - find user by email with safety checks
-    const user = allUsers.find(u => {
-      if (!u.email) return false;
-      return u.email.toLowerCase() === email.toLowerCase();
-    });
+    const user = allUsers.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
 
     if (user) {
-      setCurrentUser(user);
+      // Check status for drivers specifically
       if (user.role === UserRole.DRIVER) {
+        if (user.approvalStatus === 'REJECTED') {
+          alert("Login Denied: Your driver application was rejected. Please contact support@bicadriver.com for more information.");
+          return;
+        }
+        // Even if PENDING, we let them login to see their pending screen
+        setCurrentUser(user);
         navigateTo(AppScreen.DRIVER_DASHBOARD);
-      } else if (user.role === UserRole.OWNER) {
+      } else {
+        setCurrentUser(user);
         navigateTo(AppScreen.MAIN_REQUEST);
       }
     } else if (email.toLowerCase() === 'admin@bicadriver.com') {
@@ -119,9 +122,9 @@ const App: React.FC = () => {
     );
     setAllUsers(updatedUsers);
     
-    // Update current user if it's the one being modified
+    // Sync current user state if they are logged in while admin modifies them
     if (currentUser && currentUser.id === userId) {
-      setCurrentUser({ ...currentUser, approvalStatus: status });
+      setCurrentUser(prev => prev ? { ...prev, approvalStatus: status } : null);
     }
   };
 

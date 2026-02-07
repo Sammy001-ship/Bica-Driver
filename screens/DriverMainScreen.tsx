@@ -46,6 +46,7 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
   const [activeRide, setActiveRide] = useState<RideRequest | null>(null);
   const [ridePhase, setRidePhase] = useState<RidePhase>('pickup');
   const [driverPos, setDriverPos] = useState<[number, number]>([6.4549, 3.3896]);
+  const [totalEarnings, setTotalEarnings] = useState<number>(45250); // Starting mock balance
   const trackingInterval = useRef<any>(null);
 
   const approvalStatus = user?.approvalStatus || 'PENDING';
@@ -79,12 +80,21 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
   };
 
   const handleCompleteTrip = () => {
+    if (!activeRide) return;
+    
     CapacitorService.triggerHaptic();
+    
+    // Parse the price (strip commas) and update total earnings immediately
+    const tripPrice = parseInt(activeRide.price.replace(/,/g, ''), 10);
+    setTotalEarnings(prev => prev + tripPrice);
+    
     setRidePhase('completed');
+    
+    // Return to radar after a delay
     setTimeout(() => {
       setActiveRide(null);
       setRidePhase('pickup');
-    }, 3000);
+    }, 4000);
   };
 
   const getPhaseText = () => {
@@ -95,6 +105,14 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
       case 'completed': return "Trip Completed";
       default: return "";
     }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: 'NGN',
+      minimumFractionDigits: 0
+    }).format(amount).replace('NGN', '₦');
   };
 
   if (approvalStatus === 'PENDING') {
@@ -188,6 +206,25 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
             <span className="material-symbols-outlined">person</span>
           </button>
         </div>
+
+        {/* Global Wallet Display */}
+        {!activeRide && (
+          <div className="animate-fade-in flex justify-center mt-2">
+            <div className="bg-surface-dark/90 backdrop-blur-xl border border-white/10 rounded-2xl p-4 px-6 flex items-center gap-4 shadow-2xl">
+              <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary">
+                <span className="material-symbols-outlined filled">account_balance_wallet</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Total Earnings</span>
+                <span className="text-xl font-black text-white tracking-tight">{formatCurrency(totalEarnings)}</span>
+              </div>
+              <div className="w-px h-8 bg-white/10 mx-2"></div>
+              <button className="text-primary text-[10px] font-black uppercase tracking-widest hover:underline active:scale-95 transition-all">
+                Payout
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-1"></div>
@@ -248,73 +285,4 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-primary active:scale-90">
-                      <span className="material-symbols-outlined text-[20px]">chat</span>
-                    </button>
-                    <button className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-green-500 active:scale-90">
-                      <span className="material-symbols-outlined text-[20px]">call</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex gap-4">
-                  <div className="flex flex-col items-center pt-1 shrink-0">
-                    <div className={`w-3 h-3 rounded-full border-2 ${ridePhase === 'pickup' || ridePhase === 'arrived' ? 'border-primary animate-pulse' : 'border-slate-500 bg-slate-500'}`}></div>
-                    <div className="w-0.5 flex-1 bg-slate-700 my-1"></div>
-                    <div className={`w-3 h-3 rounded-sm ${ridePhase === 'trip' ? 'bg-primary animate-pulse' : 'bg-slate-700'}`}></div>
-                  </div>
-                  <div className="flex-1 flex flex-col gap-4">
-                    <div>
-                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Pick up</p>
-                       <p className="text-sm font-bold text-white truncate">{activeRide.pickup}</p>
-                    </div>
-                    <div>
-                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Drop off</p>
-                       <p className="text-sm font-bold text-white truncate">{activeRide.destination}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-input-dark/50 p-4 rounded-2xl flex justify-between items-center border border-white/5">
-                   <div className="flex flex-col">
-                      <span className="text-[10px] font-black text-slate-500 uppercase">Est. Earnings</span>
-                      <span className="text-xl font-black text-white">₦{activeRide.price}</span>
-                   </div>
-                   <div className="flex flex-col text-right">
-                      <span className="text-[10px] font-black text-slate-500 uppercase">Distance</span>
-                      <span className="text-sm font-bold text-white">{activeRide.distance}</span>
-                   </div>
-                </div>
-
-                {ridePhase === 'pickup' && (
-                  <button onClick={handleArrival} className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-95 transition-all">
-                    I Have Arrived
-                  </button>
-                )}
-                {ridePhase === 'arrived' && (
-                  <button onClick={handleStartTrip} className="w-full bg-green-500 text-white font-black py-4 rounded-2xl shadow-xl shadow-green-500/20 active:scale-95 transition-all">
-                    Start Trip
-                  </button>
-                )}
-                {ridePhase === 'trip' && (
-                  <button onClick={handleCompleteTrip} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-blue-600/20 active:scale-95 transition-all">
-                    Complete Trip
-                  </button>
-                )}
-                {ridePhase === 'completed' && (
-                  <div className="w-full py-4 text-center bg-green-500/10 border border-green-500/20 rounded-2xl animate-scale-in">
-                    <p className="text-green-500 font-black flex items-center justify-center gap-2">
-                       <span className="material-symbols-outlined">check_circle</span>
-                       Trip Success! ₦{activeRide.price} added to wallet.
-                    </p>
-                  </div>
-                )}
-              </div>
-           )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default DriverMainScreen;
+                    <button className="w-10 h-1
