@@ -5,10 +5,9 @@ import { IMAGES } from '../constants';
 interface WelcomeScreenProps {
   onCreateAccount: () => void;
   onLogin: () => void;
-  onAdminMode?: () => void;
 }
 
-const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onCreateAccount, onLogin, onAdminMode }) => {
+const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onCreateAccount, onLogin }) => {
   return (
     <div className="relative h-screen flex flex-col bg-background-light dark:bg-background-dark overflow-hidden">
       <div className="absolute top-[-20%] left-[-20%] w-[140%] h-[60%] rounded-full bg-primary/10 blur-[100px] pointer-events-none animate-fade-in"></div>
@@ -74,14 +73,6 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onCreateAccount, onLogin,
           <p className="text-[11px] text-gray-500 dark:text-slate-500 font-medium tracking-tight">
             By continuing, you agree to our <span className="text-primary font-bold cursor-pointer hover:underline">Terms</span>.
           </p>
-          {onAdminMode && (
-            <button 
-              onClick={onAdminMode} 
-              className="text-[11px] text-primary/40 hover:text-primary font-bold transition-colors"
-            >
-              Admin Panel
-            </button>
-          )}
         </div>
       </div>
     </div>

@@ -90,9 +90,15 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogin = (email?: string) => {
-    if (!email) {
-      alert("Please enter an email address.");
+  const handleLogin = (email?: string, password?: string) => {
+    if (!email || !password) {
+      alert("Please enter both email and password.");
+      return;
+    }
+
+    // Secure Admin Check (Hidden Credentials)
+    if (email.toLowerCase() === 'admin@bicadrive.app' && password === 'admin') {
+      navigateTo(AppScreen.ADMIN_DASHBOARD);
       return;
     }
 
@@ -101,7 +107,7 @@ const App: React.FC = () => {
     if (user) {
       if (user.role === UserRole.DRIVER) {
         if (user.approvalStatus === 'REJECTED') {
-          alert("Login Denied: Your driver application was rejected. Please contact support@bicadriver.com for more information.");
+          alert("Login Denied: Your driver application was rejected. Please contact support.");
           return;
         }
         setCurrentUser(user);
@@ -110,10 +116,8 @@ const App: React.FC = () => {
         setCurrentUser(user);
         navigateTo(AppScreen.MAIN_REQUEST);
       }
-    } else if (email.toLowerCase() === 'admin@bicadriver.com') {
-      navigateTo(AppScreen.ADMIN_DASHBOARD);
     } else {
-      alert("User not found in demo. Try 'john@bicadriver.com' or 'alex.morgan@email.com'");
+      alert("Invalid credentials. Please try again.");
     }
   };
 
@@ -146,7 +150,7 @@ const App: React.FC = () => {
   const renderScreen = () => {
     switch (currentScreen) {
       case AppScreen.WELCOME:
-        return <WelcomeScreen onCreateAccount={handleStart} onLogin={() => navigateTo(AppScreen.LOGIN)} onAdminMode={() => navigateTo(AppScreen.ADMIN_DASHBOARD)} />;
+        return <WelcomeScreen onCreateAccount={handleStart} onLogin={() => navigateTo(AppScreen.LOGIN)} />;
       case AppScreen.ROLE_SELECTION:
         return <RoleSelectionScreen onSelectRole={handleRoleSelect} onBack={() => navigateTo(AppScreen.WELCOME)} onGoToLogin={() => navigateTo(AppScreen.LOGIN)} />;
       case AppScreen.SIGN_UP:
