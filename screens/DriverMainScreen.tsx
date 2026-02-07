@@ -51,7 +51,7 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
   const approvalStatus = user?.approvalStatus || 'PENDING';
 
   useEffect(() => {
-    if (isOnline && ridePhase !== 'completed' && approvalStatus === 'APPROVED') {
+    if (isOnline && approvalStatus === 'APPROVED') {
       const updateLocation = async () => {
         const pos = await CapacitorService.getCurrentLocation();
         if (pos) setDriverPos([pos.coords.latitude, pos.coords.longitude]);
@@ -60,7 +60,42 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
       trackingInterval.current = setInterval(updateLocation, 10000);
     }
     return () => clearInterval(trackingInterval.current);
-  }, [isOnline, ridePhase, approvalStatus]);
+  }, [isOnline, approvalStatus]);
+
+  const handleAcceptRide = (ride: RideRequest) => {
+    CapacitorService.triggerHaptic();
+    setActiveRide(ride);
+    setRidePhase('pickup');
+  };
+
+  const handleArrival = () => {
+    CapacitorService.triggerHaptic();
+    setRidePhase('arrived');
+  };
+
+  const handleStartTrip = () => {
+    CapacitorService.triggerHaptic();
+    setRidePhase('trip');
+  };
+
+  const handleCompleteTrip = () => {
+    CapacitorService.triggerHaptic();
+    setRidePhase('completed');
+    setTimeout(() => {
+      setActiveRide(null);
+      setRidePhase('pickup');
+    }, 3000);
+  };
+
+  const getPhaseText = () => {
+    switch(ridePhase) {
+      case 'pickup': return "Heading to Pickup";
+      case 'arrived': return "Driver Arrived";
+      case 'trip': return "Trip in Progress";
+      case 'completed': return "Trip Completed";
+      default: return "";
+    }
+  };
 
   if (approvalStatus === 'PENDING') {
     return (
@@ -118,22 +153,35 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
     );
   }
 
+  const mapMarkers: any[] = [{ position: driverPos, title: 'You', icon: 'taxi' }];
+  if (activeRide) {
+    if (ridePhase === 'pickup' || ridePhase === 'arrived') {
+       mapMarkers.push({ position: activeRide.coords, title: 'Pickup Location', icon: 'pickup' });
+    } else if (ridePhase === 'trip') {
+       mapMarkers.push({ position: activeRide.destCoords, title: 'Destination', icon: 'destination' });
+    }
+  }
+
   return (
     <div className="h-screen w-full overflow-hidden flex flex-col relative bg-background-dark font-display">
       <div className="absolute inset-0 z-0">
-        <InteractiveMap center={driverPos} markers={[{ position: driverPos, title: 'You', icon: 'taxi' }]} />
+        <InteractiveMap center={driverPos} markers={mapMarkers} />
         <div className="absolute inset-0 bg-gradient-to-b from-[#101622]/40 via-transparent to-[#101622]/90 pointer-events-none"></div>
       </div>
 
       <div className="relative z-10 p-4 pt-8 bg-gradient-to-b from-background-dark/90 to-transparent flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <button onClick={onBack} className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg active:scale-90 transition-all">
-            <span className="material-symbols-outlined">logout</span>
-          </button>
+          {!activeRide && (
+            <button onClick={onBack} className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg active:scale-90 transition-all">
+              <span className="material-symbols-outlined">logout</span>
+            </button>
+          )}
           
-          <div onClick={() => setIsOnline(!isOnline)} className={`flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border border-white/10 cursor-pointer transition-all ${isOnline ? 'bg-primary/90 text-white' : 'bg-surface-dark/80 text-slate-400'}`}>
-            <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-green-400 animate-pulse' : 'bg-slate-500'}`}></div>
-            <span className="text-sm font-bold tracking-tight uppercase">{isOnline ? 'Online' : 'Offline'}</span>
+          <div onClick={() => !activeRide && setIsOnline(!isOnline)} className={`flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border border-white/10 transition-all ${activeRide ? 'bg-primary text-white pointer-events-none' : isOnline ? 'bg-primary/90 text-white cursor-pointer' : 'bg-surface-dark/80 text-slate-400 cursor-pointer'}`}>
+            <div className={`w-2.5 h-2.5 rounded-full ${isOnline || activeRide ? 'bg-green-400 animate-pulse' : 'bg-slate-500'}`}></div>
+            <span className="text-sm font-bold tracking-tight uppercase">
+              {activeRide ? getPhaseText() : isOnline ? 'Online' : 'Offline'}
+            </span>
           </div>
 
           <button onClick={onOpenProfile} className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg active:scale-90 transition-all">
@@ -144,35 +192,125 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
 
       <div className="flex-1"></div>
 
-      <div className="relative z-20 w-full bg-surface-dark rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.6)] flex flex-col border-t border-white/5">
+      <div className="relative z-20 w-full bg-surface-dark rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.6)] flex flex-col border-t border-white/5 transition-all duration-500">
         <div className="p-6 pt-2 pb-10 flex flex-col gap-5">
-           <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-extrabold text-white">Live Radar</h3>
-                <p className="text-slate-400 text-xs font-medium">Found 1 job nearby</p>
-              </div>
-              <div className="flex items-center gap-1.5 bg-primary/10 px-3 py-1.5 rounded-xl border border-primary/20">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-ping"></div>
-                <span className="text-primary text-[10px] font-black uppercase tracking-widest">Active</span>
-              </div>
-           </div>
-           
-           {MOCK_REQUESTS.map(req => (
-              <div key={req.id} className="bg-input-dark/40 p-5 rounded-3xl border border-white/5 flex flex-col gap-4 shadow-lg animate-slide-up">
-                 <div className="flex items-center gap-4">
-                    <img src={req.avatar} className="w-12 h-12 rounded-full object-cover ring-2 ring-white/5" alt="" />
-                    <div className="flex-1">
-                       <h4 className="font-bold text-white text-base leading-tight">{req.ownerName}</h4>
-                       <p className="text-slate-500 text-xs mt-1 flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">map</span>{req.pickup}</p>
+           {!activeRide ? (
+              <>
+                 <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-extrabold text-white">Live Radar</h3>
+                      <p className="text-slate-400 text-xs font-medium">{isOnline ? 'Scanning for nearby jobs...' : 'Go online to receive jobs'}</p>
                     </div>
-                    <div className="text-right">
-                       <p className="font-black text-white text-lg leading-none">₦{req.price}</p>
-                       <p className="text-primary text-[10px] font-bold mt-1.5">{req.time} away</p>
-                    </div>
+                    {isOnline && (
+                      <div className="flex items-center gap-1.5 bg-primary/10 px-3 py-1.5 rounded-xl border border-primary/20">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary animate-ping"></div>
+                        <span className="text-primary text-[10px] font-black uppercase tracking-widest">Active</span>
+                      </div>
+                    )}
                  </div>
-                 <button onClick={() => alert("Job Accepted!")} className="w-full bg-primary text-white font-black py-4 rounded-2xl active:scale-[0.97] transition-all">Accept Ride</button>
+                 
+                 {isOnline && MOCK_REQUESTS.map(req => (
+                    <div key={req.id} className="bg-input-dark/40 p-5 rounded-3xl border border-white/5 flex flex-col gap-4 shadow-lg animate-slide-up">
+                       <div className="flex items-center gap-4">
+                          <img src={req.avatar} className="w-12 h-12 rounded-full object-cover ring-2 ring-white/5" alt="" />
+                          <div className="flex-1">
+                             <h4 className="font-bold text-white text-base leading-tight">{req.ownerName}</h4>
+                             <p className="text-slate-500 text-xs mt-1 flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">map</span>{req.pickup}</p>
+                          </div>
+                          <div className="text-right">
+                             <p className="font-black text-white text-lg leading-none">₦{req.price}</p>
+                             <p className="text-primary text-[10px] font-bold mt-1.5">{req.time} away</p>
+                          </div>
+                       </div>
+                       <button 
+                        onClick={() => handleAcceptRide(req)} 
+                        className="w-full bg-primary text-white font-black py-4 rounded-2xl active:scale-[0.97] transition-all hover:brightness-110"
+                       >
+                        Accept Ride
+                       </button>
+                    </div>
+                 ))}
+                 {!isOnline && (
+                   <div className="py-10 text-center flex flex-col items-center gap-4 opacity-40">
+                      <span className="material-symbols-outlined text-5xl">wifi_off</span>
+                      <p className="text-sm font-medium">Radar disabled while offline</p>
+                   </div>
+                 )}
+              </>
+           ) : (
+              <div className="flex flex-col gap-6 animate-slide-up">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <img src={activeRide.avatar} className="w-12 h-12 rounded-full object-cover ring-2 ring-primary" alt="" />
+                    <div>
+                      <h4 className="font-bold text-white text-base">{activeRide.ownerName}</h4>
+                      <p className="text-slate-400 text-xs">Verified Owner</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-primary active:scale-90">
+                      <span className="material-symbols-outlined text-[20px]">chat</span>
+                    </button>
+                    <button className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-green-500 active:scale-90">
+                      <span className="material-symbols-outlined text-[20px]">call</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="flex flex-col items-center pt-1 shrink-0">
+                    <div className={`w-3 h-3 rounded-full border-2 ${ridePhase === 'pickup' || ridePhase === 'arrived' ? 'border-primary animate-pulse' : 'border-slate-500 bg-slate-500'}`}></div>
+                    <div className="w-0.5 flex-1 bg-slate-700 my-1"></div>
+                    <div className={`w-3 h-3 rounded-sm ${ridePhase === 'trip' ? 'bg-primary animate-pulse' : 'bg-slate-700'}`}></div>
+                  </div>
+                  <div className="flex-1 flex flex-col gap-4">
+                    <div>
+                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Pick up</p>
+                       <p className="text-sm font-bold text-white truncate">{activeRide.pickup}</p>
+                    </div>
+                    <div>
+                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Drop off</p>
+                       <p className="text-sm font-bold text-white truncate">{activeRide.destination}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-input-dark/50 p-4 rounded-2xl flex justify-between items-center border border-white/5">
+                   <div className="flex flex-col">
+                      <span className="text-[10px] font-black text-slate-500 uppercase">Est. Earnings</span>
+                      <span className="text-xl font-black text-white">₦{activeRide.price}</span>
+                   </div>
+                   <div className="flex flex-col text-right">
+                      <span className="text-[10px] font-black text-slate-500 uppercase">Distance</span>
+                      <span className="text-sm font-bold text-white">{activeRide.distance}</span>
+                   </div>
+                </div>
+
+                {ridePhase === 'pickup' && (
+                  <button onClick={handleArrival} className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-95 transition-all">
+                    I Have Arrived
+                  </button>
+                )}
+                {ridePhase === 'arrived' && (
+                  <button onClick={handleStartTrip} className="w-full bg-green-500 text-white font-black py-4 rounded-2xl shadow-xl shadow-green-500/20 active:scale-95 transition-all">
+                    Start Trip
+                  </button>
+                )}
+                {ridePhase === 'trip' && (
+                  <button onClick={handleCompleteTrip} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-blue-600/20 active:scale-95 transition-all">
+                    Complete Trip
+                  </button>
+                )}
+                {ridePhase === 'completed' && (
+                  <div className="w-full py-4 text-center bg-green-500/10 border border-green-500/20 rounded-2xl animate-scale-in">
+                    <p className="text-green-500 font-black flex items-center justify-center gap-2">
+                       <span className="material-symbols-outlined">check_circle</span>
+                       Trip Success! ₦{activeRide.price} added to wallet.
+                    </p>
+                  </div>
+                )}
               </div>
-           ))}
+           )}
         </div>
       </div>
     </div>
