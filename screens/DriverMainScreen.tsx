@@ -39,17 +39,18 @@ interface DriverMainScreenProps {
   user: UserProfile | null;
   onOpenProfile: () => void;
   onBack: () => void;
+  onUpdateEarnings: (amount: number) => void;
 }
 
-const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile, onBack }) => {
+const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile, onBack, onUpdateEarnings }) => {
   const [isOnline, setIsOnline] = useState(true);
   const [activeRide, setActiveRide] = useState<RideRequest | null>(null);
   const [ridePhase, setRidePhase] = useState<RidePhase>('pickup');
   const [driverPos, setDriverPos] = useState<[number, number]>([6.4549, 3.3896]);
-  const [totalEarnings, setTotalEarnings] = useState<number>(45250); // Starting mock balance
   const trackingInterval = useRef<any>(null);
 
   const approvalStatus = user?.approvalStatus || 'PENDING';
+  const totalEarnings = user?.walletBalance || 0;
 
   useEffect(() => {
     if (isOnline && approvalStatus === 'APPROVED') {
@@ -84,9 +85,9 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
     
     CapacitorService.triggerHaptic();
     
-    // Parse the price (strip commas) and update total earnings immediately
+    // Parse the price (strip commas) and update total earnings in global state
     const tripPrice = parseInt(activeRide.price.replace(/,/g, ''), 10);
-    setTotalEarnings(prev => prev + tripPrice);
+    onUpdateEarnings(tripPrice);
     
     setRidePhase('completed');
     
@@ -285,4 +286,82 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button className="w-10 h-1
+                    <button className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-primary active:scale-90">
+                      <span className="material-symbols-outlined text-[20px]">chat</span>
+                    </button>
+                    <button className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-green-500 active:scale-90">
+                      <span className="material-symbols-outlined text-[20px]">call</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="flex flex-col items-center pt-1 shrink-0">
+                    <div className={`w-3 h-3 rounded-full border-2 ${ridePhase === 'pickup' || ridePhase === 'arrived' ? 'border-primary animate-pulse' : 'border-slate-500 bg-slate-500'}`}></div>
+                    <div className="w-0.5 flex-1 bg-slate-700 my-1"></div>
+                    <div className={`w-3 h-3 rounded-sm ${ridePhase === 'trip' ? 'bg-primary animate-pulse' : 'bg-slate-700'}`}></div>
+                  </div>
+                  <div className="flex-1 flex flex-col gap-4">
+                    <div>
+                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Pick up</p>
+                       <p className="text-sm font-bold text-white truncate">{activeRide.pickup}</p>
+                    </div>
+                    <div>
+                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Drop off</p>
+                       <p className="text-sm font-bold text-white truncate">{activeRide.destination}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-input-dark/50 p-4 rounded-2xl flex justify-between items-center border border-white/5">
+                   <div className="flex flex-col">
+                      <span className="text-[10px] font-black text-slate-500 uppercase">Est. Earnings</span>
+                      <span className="text-xl font-black text-white">₦{activeRide.price}</span>
+                   </div>
+                   <div className="flex flex-col text-right">
+                      <span className="text-[10px] font-black text-slate-500 uppercase">Distance</span>
+                      <span className="text-sm font-bold text-white">{activeRide.distance}</span>
+                   </div>
+                </div>
+
+                {ridePhase === 'pickup' && (
+                  <button onClick={handleArrival} className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-95 transition-all">
+                    I Have Arrived
+                  </button>
+                )}
+                {ridePhase === 'arrived' && (
+                  <button onClick={handleStartTrip} className="w-full bg-green-500 text-white font-black py-4 rounded-2xl shadow-xl shadow-green-500/20 active:scale-95 transition-all">
+                    Start Trip
+                  </button>
+                )}
+                {ridePhase === 'trip' && (
+                  <button onClick={handleCompleteTrip} className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-blue-600/20 active:scale-95 transition-all">
+                    Complete Trip
+                  </button>
+                )}
+                {ridePhase === 'completed' && (
+                  <div className="w-full py-6 text-center bg-green-500/10 border-2 border-green-500/30 rounded-[2rem] animate-scale-in flex flex-col items-center gap-2">
+                    <div className="w-14 h-14 bg-green-500 rounded-full flex items-center justify-center text-white mb-2 shadow-lg shadow-green-500/40">
+                       <span className="material-symbols-outlined text-3xl filled">verified</span>
+                    </div>
+                    <p className="text-green-500 text-xl font-black">
+                       Trip Success!
+                    </p>
+                    <p className="text-slate-400 text-sm font-medium">
+                       +{formatCurrency(parseInt(activeRide.price.replace(/,/g, ''), 10))} added to your wallet
+                    </p>
+                    <div className="mt-4 flex items-center gap-2 bg-background-dark/50 px-4 py-2 rounded-full border border-white/5">
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">New Balance:</span>
+                      <span className="text-sm font-bold text-white">{formatCurrency(totalEarnings)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DriverMainScreen;

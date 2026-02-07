@@ -17,6 +17,7 @@ export interface UserProfile {
   rating: number;
   trips: number;
   avatar: string;
+  walletBalance?: number;
   // Role specific fields
   carType?: string;
   licenseImage?: string;

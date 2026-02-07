@@ -22,7 +22,8 @@ const MOCK_USERS: UserProfile[] = [
     rating: 4.9,
     trips: 240,
     avatar: IMAGES.USER_AVATAR,
-    carType: "Mercedes S-Class"
+    carType: "Mercedes S-Class",
+    walletBalance: 0
   },
   {
     id: '2',
@@ -30,11 +31,12 @@ const MOCK_USERS: UserProfile[] = [
     email: "john@bicadriver.com",
     phone: "+234 801 234 5678",
     role: UserRole.DRIVER,
-    rating: 0,
-    trips: 0,
+    rating: 4.8,
+    trips: 156,
     avatar: IMAGES.DRIVER_CARD,
-    approvalStatus: 'PENDING',
-    backgroundCheckAccepted: true
+    approvalStatus: 'APPROVED',
+    backgroundCheckAccepted: true,
+    walletBalance: 45250
   }
 ];
 
@@ -74,7 +76,8 @@ const App: React.FC = () => {
       licenseImage: userData.licenseImage,
       selfieImage: userData.selfieImage,
       backgroundCheckAccepted: userData.backgroundCheckAccepted,
-      approvalStatus: selectedSignupRole === UserRole.DRIVER ? 'PENDING' : 'APPROVED'
+      approvalStatus: selectedSignupRole === UserRole.DRIVER ? 'PENDING' : 'APPROVED',
+      walletBalance: 0
     };
 
     setAllUsers([...allUsers, newUser]);
@@ -96,13 +99,11 @@ const App: React.FC = () => {
     const user = allUsers.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
 
     if (user) {
-      // Check status for drivers specifically
       if (user.role === UserRole.DRIVER) {
         if (user.approvalStatus === 'REJECTED') {
           alert("Login Denied: Your driver application was rejected. Please contact support@bicadriver.com for more information.");
           return;
         }
-        // Even if PENDING, we let them login to see their pending screen
         setCurrentUser(user);
         navigateTo(AppScreen.DRIVER_DASHBOARD);
       } else {
@@ -117,15 +118,24 @@ const App: React.FC = () => {
   };
 
   const handleUpdateDriverStatus = (userId: string, status: ApprovalStatus) => {
-    const updatedUsers = allUsers.map(u => 
+    setAllUsers(prevUsers => prevUsers.map(u => 
       u.id === userId ? { ...u, approvalStatus: status } : u
-    );
-    setAllUsers(updatedUsers);
+    ));
     
-    // Sync current user state if they are logged in while admin modifies them
     if (currentUser && currentUser.id === userId) {
       setCurrentUser(prev => prev ? { ...prev, approvalStatus: status } : null);
     }
+  };
+
+  const handleUpdateEarnings = (amount: number) => {
+    if (!currentUser) return;
+    
+    const newBalance = (currentUser.walletBalance || 0) + amount;
+    
+    setCurrentUser(prev => prev ? { ...prev, walletBalance: newBalance } : null);
+    setAllUsers(prevUsers => prevUsers.map(u => 
+      u.id === currentUser.id ? { ...u, walletBalance: newBalance } : u
+    ));
   };
 
   const handleLogout = () => {
@@ -146,13 +156,25 @@ const App: React.FC = () => {
       case AppScreen.MAIN_REQUEST:
         return <RequestRideScreen onOpenProfile={() => navigateTo(AppScreen.PROFILE)} onBack={handleLogout} />;
       case AppScreen.DRIVER_DASHBOARD:
-        return <DriverMainScreen user={currentUser} onOpenProfile={() => navigateTo(AppScreen.PROFILE)} onBack={handleLogout} />;
+        return <DriverMainScreen user={currentUser} onOpenProfile={() => navigateTo(AppScreen.PROFILE)} onBack={handleLogout} onUpdateEarnings={handleUpdateEarnings} />;
       case AppScreen.PROFILE:
-        return <ProfileScreen user={currentUser!} initialRole={currentUser!.role} onBack={() => currentUser!.role === UserRole.DRIVER ? navigateTo(AppScreen.DRIVER_DASHBOARD) : navigateTo(AppScreen.MAIN_REQUEST)} onLogout={handleLogout} onUpdateAvatar={(a) => setCurrentUser({...currentUser!, avatar: a})} />;
+        if (!currentUser) return <WelcomeScreen onCreateAccount={handleStart} onLogin={() => navigateTo(AppScreen.LOGIN)} />;
+        return (
+          <ProfileScreen 
+            user={currentUser} 
+            initialRole={currentUser.role} 
+            onBack={() => currentUser.role === UserRole.DRIVER ? navigateTo(AppScreen.DRIVER_DASHBOARD) : navigateTo(AppScreen.MAIN_REQUEST)} 
+            onLogout={handleLogout} 
+            onUpdateAvatar={(a) => {
+              setCurrentUser({...currentUser, avatar: a});
+              setAllUsers(users => users.map(u => u.id === currentUser.id ? {...u, avatar: a} : u));
+            }} 
+          />
+        );
       case AppScreen.ADMIN_DASHBOARD:
         return <AdminDashboardScreen users={allUsers} onUpdateStatus={handleUpdateDriverStatus} onBack={() => navigateTo(AppScreen.WELCOME)} />;
       default:
-        return <WelcomeScreen onCreateAccount={handleStart} onLogin={() => navigateTo(AppScreen.LOGIN)} onAdminMode={() => navigateTo(AppScreen.ADMIN_DASHBOARD)} />;
+        return <WelcomeScreen onCreateAccount={handleStart} onLogin={() => navigateTo(AppScreen.LOGIN)} />;
     }
   };
 
