@@ -32,6 +32,30 @@
             "display": ["Plus Jakarta Sans", "sans-serif"]
           },
           borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "3xl": "1.5rem", "full": "9999px" },
+          animation: {
+            'fade-in': 'fadeIn 0.4s ease-out forwards',
+            'slide-up': 'slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            'scale-in': 'scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
+            'soft-pulse': 'softPulse 2s infinite',
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: '0' },
+              '100%': { opacity: '1' },
+            },
+            slideUp: {
+              '0%': { transform: 'translateY(20px)', opacity: '0' },
+              '100%': { transform: 'translateY(0)', opacity: '1' },
+            },
+            scaleIn: {
+              '0%': { transform: 'scale(0.9)', opacity: '0' },
+              '100%': { transform: 'scale(1)', opacity: '1' },
+            },
+            softPulse: {
+              '0%, 100%': { opacity: '1', transform: 'scale(1)' },
+              '50%': { opacity: '0.7', transform: 'scale(0.98)' },
+            }
+          }
         },
       },
     }
@@ -42,6 +66,7 @@
       margin: 0;
       padding: 0;
       overflow-x: hidden;
+      background-color: #020617; /* Darkest slate for the device frame contrast */
     }
     .material-symbols-outlined {
       font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
@@ -87,6 +112,15 @@
       70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(19, 91, 236, 0); }
       100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(19, 91, 236, 0); }
     }
+    
+    /* Reveal Animation Helpers */
+    .stagger-1 { animation-delay: 0.1s; }
+    .stagger-2 { animation-delay: 0.2s; }
+    .stagger-3 { animation-delay: 0.3s; }
+    
+    .screen-transition {
+      animation: fadeIn 0.4s ease-out, slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
   </style>
 <script type="importmap">
 {
@@ -108,7 +142,7 @@
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
-<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-white font-display antialiased">
+<body class="bg-slate-950 text-slate-900 dark:text-white font-display antialiased">
   <div id="root"></div>
   <script type="module" src="./index.tsx"></script>
 </body>

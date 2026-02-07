@@ -110,7 +110,12 @@ const App: React.FC = () => {
   return (
     <div className="flex justify-center items-start min-h-screen bg-slate-950">
       <div className="w-full max-w-md min-h-screen bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden relative">
-        {renderScreen()}
+        <div 
+          key={currentScreen} 
+          className="h-full w-full screen-transition overflow-hidden"
+        >
+          {renderScreen()}
+        </div>
       </div>
     </div>
   );

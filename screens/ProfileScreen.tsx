@@ -13,6 +13,7 @@ interface ProfileScreenProps {
 }
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack, onLogout, onUpdateAvatar }) => {
+  // The role is locked based on the initial selection for both Owners and Drivers.
   const [activeRole, setActiveRole] = useState<UserRole>(initialRole);
 
   const handleFeatureAlert = (feature: string) => {
@@ -27,6 +28,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
       onUpdateAvatar(photo);
     }
   };
+
+  // Requirement: Once a user selects a role (Owner or Driver), they are locked to that mode.
+  // Switcher is only visible if the role is UNSET (which should not happen in normal flow).
+  const isRoleSwitcherVisible = initialRole === UserRole.UNSET;
 
   return (
     <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-white min-h-screen pb-10 flex flex-col">
@@ -67,7 +72,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
             <h1 className="text-2xl font-bold leading-tight">{user.name}</h1>
             <div className="flex items-center gap-2 mt-1">
               <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide">
-                {activeRole === UserRole.DRIVER ? 'Driver' : 'Owner'}
+                {activeRole === UserRole.DRIVER ? 'Professional Driver' : 'Car Owner'}
               </span>
               <span className="text-text-secondary text-sm font-medium flex items-center gap-1">
                 <span className="material-symbols-outlined text-yellow-500 filled" style={{ fontSize: '16px' }}>star</span>
@@ -77,26 +82,44 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
           </div>
         </div>
 
-        <div className="px-4">
-          <div className="bg-slate-200 dark:bg-surface-dark p-1 rounded-xl flex">
-            <button 
-              onClick={() => { CapacitorService.triggerHaptic(); setActiveRole(UserRole.DRIVER); }}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold text-center transition-all ${
-                activeRole === UserRole.DRIVER ? 'bg-surface-light dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-text-secondary'
-              }`}
-            >
-              Driver Mode
-            </button>
-            <button 
-              onClick={() => { CapacitorService.triggerHaptic(); setActiveRole(UserRole.OWNER); }}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold text-center transition-all ${
-                activeRole === UserRole.OWNER ? 'bg-surface-light dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-text-secondary'
-              }`}
-            >
-              Owner Mode
-            </button>
+        {isRoleSwitcherVisible && (
+          <div className="px-4">
+            <div className="bg-slate-200 dark:bg-surface-dark p-1 rounded-xl flex">
+              <button 
+                onClick={() => { CapacitorService.triggerHaptic(); setActiveRole(UserRole.DRIVER); }}
+                className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold text-center transition-all ${
+                  activeRole === UserRole.DRIVER ? 'bg-surface-light dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-text-secondary'
+                }`}
+              >
+                Driver Mode
+              </button>
+              <button 
+                onClick={() => { CapacitorService.triggerHaptic(); setActiveRole(UserRole.OWNER); }}
+                className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold text-center transition-all ${
+                  activeRole === UserRole.OWNER ? 'bg-surface-light dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-text-secondary'
+                }`}
+              >
+                Owner Mode
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+
+        {!isRoleSwitcherVisible && (
+          <div className="px-4">
+            <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 flex items-center gap-3">
+              <span className="material-symbols-outlined text-primary">
+                {activeRole === UserRole.DRIVER ? 'verified_user' : 'verified'}
+              </span>
+              <div>
+                <p className="text-sm font-bold text-slate-900 dark:text-white">
+                  {activeRole === UserRole.DRIVER ? 'Verified Professional Driver' : 'Verified Car Owner'}
+                </p>
+                <p className="text-xs text-text-secondary">Premium account status active</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-col gap-4">
           <div className="px-4">
@@ -126,32 +149,58 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, initialRole, onBack
           </div>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <div className="px-4 flex items-center justify-between">
-            <h3 className="text-lg font-bold">Vehicle Details</h3>
-            <button onClick={() => handleFeatureAlert("Adding a Vehicle")} className="text-primary text-sm font-semibold active:scale-95">Add New</button>
-          </div>
-          <div className="px-4">
-            <div onClick={() => handleFeatureAlert("Vehicle Management")} className="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm flex items-start gap-4 cursor-pointer active:scale-[0.99] transition-transform">
-              <div className="w-20 h-20 shrink-0 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center overflow-hidden">
-                <img className="w-full h-full object-cover" src={IMAGES.CAR_IMAGE}/>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-bold text-base truncate">Toyota Prius</h4>
-                    <p className="text-text-secondary text-sm">Dark Grey • Sedan</p>
-                  </div>
-                  <span className="bg-green-500/10 text-green-500 text-xs font-bold px-2 py-1 rounded-full">Active</span>
+        {activeRole === UserRole.OWNER && (
+          <div className="flex flex-col gap-4">
+            <div className="px-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold">Vehicle Details</h3>
+              <button onClick={() => handleFeatureAlert("Adding a Vehicle")} className="text-primary text-sm font-semibold active:scale-95">Add New</button>
+            </div>
+            <div className="px-4">
+              <div onClick={() => handleFeatureAlert("Vehicle Management")} className="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm flex items-start gap-4 cursor-pointer active:scale-[0.99] transition-transform">
+                <div className="w-20 h-20 shrink-0 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center overflow-hidden">
+                  <img className="w-full h-full object-cover" src={IMAGES.CAR_IMAGE} alt="Vehicle" />
                 </div>
-                <div className="mt-3 flex items-center gap-2 bg-background-light dark:bg-background-dark rounded-lg px-2 py-1.5 w-fit">
-                  <span className="material-symbols-outlined text-text-secondary" style={{ fontSize: '16px' }}>directions_car</span>
-                  <span className="text-sm font-mono font-medium">ABC 1234</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-bold text-base truncate">Toyota Prius</h4>
+                      <p className="text-text-secondary text-sm">Dark Grey • Sedan</p>
+                    </div>
+                    <span className="bg-green-500/10 text-green-500 text-xs font-bold px-2 py-1 rounded-full">Active</span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2 bg-background-light dark:bg-background-dark rounded-lg px-2 py-1.5 w-fit">
+                    <span className="material-symbols-outlined text-text-secondary" style={{ fontSize: '16px' }}>directions_car</span>
+                    <span className="text-sm font-mono font-medium">ABC 1234</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {activeRole === UserRole.DRIVER && (
+          <div className="flex flex-col gap-4">
+            <div className="px-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold">Driver Credentials</h3>
+            </div>
+            <div className="px-4 flex flex-col gap-3">
+              <div className="flex items-center justify-between p-4 rounded-xl bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-text-secondary">badge</span>
+                  <span className="text-sm font-medium">Driving License</span>
+                </div>
+                <span className="text-green-500 text-xs font-bold uppercase">Verified</span>
+              </div>
+              <div className="flex items-center justify-between p-4 rounded-xl bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-text-secondary">description</span>
+                  <span className="text-sm font-medium">Background Check</span>
+                </div>
+                <span className="text-green-500 text-xs font-bold uppercase">Passed</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="px-4 pt-4 flex flex-col gap-3">
           <button onClick={() => handleFeatureAlert("System Settings")} className="flex items-center justify-between w-full p-4 rounded-xl bg-surface-light dark:bg-surface-dark hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group active:scale-[0.98]">
