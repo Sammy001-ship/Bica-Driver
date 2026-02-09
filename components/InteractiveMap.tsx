@@ -8,7 +8,7 @@ interface InteractiveMapProps {
     id: string;
     position: [number, number];
     title: string;
-    icon?: 'user' | 'taxi' | 'destination' | 'pickup';
+    icon?: 'user' | 'taxi' | 'destination' | 'pickup' | 'smart';
     draggable?: boolean;
   }>;
   onMarkerDragEnd?: (id: string, newPos: [number, number]) => void;
@@ -16,8 +16,8 @@ interface InteractiveMapProps {
 }
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({ 
-  center = [6.5244, 3.3792], // Default to Lagos, Nigeria
-  zoom = 13,
+  center = [6.5244, 3.3792], 
+  zoom = 15,
   markers = [],
   onMarkerDragEnd,
   className = ""
@@ -29,14 +29,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
-    // Initialize map
     const L = (window as any).L;
     const map = L.map(mapContainerRef.current, {
       zoomControl: false,
       attributionControl: true
     }).setView(center, zoom);
 
-    // Add Dark Mode Tiles (CartoDB Dark Matter)
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
       subdomains: 'abcd',
@@ -54,14 +52,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     };
   }, []);
 
-  // Update center when it changes
   useEffect(() => {
     if (mapInstanceRef.current) {
-      mapInstanceRef.current.setView(center, zoom);
+      mapInstanceRef.current.setView(center, zoom, { animate: true, duration: 1.0 });
     }
-  }, [center, zoom]);
+  }, [center]);
 
-  // Update markers
   useEffect(() => {
     if (!mapInstanceRef.current || !markersLayerRef.current) return;
     const L = (window as any).L;
@@ -70,12 +66,21 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
     markers.forEach(marker => {
       let icon;
-      if (marker.icon === 'user' || marker.icon === 'pickup') {
+      if (marker.icon === 'user') {
         icon = L.divIcon({
           className: 'custom-div-icon',
           html: '<div class="custom-location-dot"></div>',
           iconSize: [12, 12],
           iconAnchor: [6, 6]
+        });
+      } else if (marker.icon === 'pickup') {
+        icon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div class="bg-primary/20 p-2 rounded-full border border-primary/50 flex items-center justify-center shadow-lg">
+                  <div class="w-3 h-3 bg-primary rounded-full ring-2 ring-white"></div>
+                </div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14]
         });
       } else if (marker.icon === 'taxi') {
         icon = L.divIcon({

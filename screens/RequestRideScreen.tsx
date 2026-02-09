@@ -4,12 +4,20 @@ import { IMAGES } from '../constants';
 import { CapacitorService } from '../services/CapacitorService';
 import { GoogleGenAI } from "@google/genai";
 import InteractiveMap from '../components/InteractiveMap';
+import { Geolocation } from '@capacitor/geolocation';
 
 interface SearchResult {
   display_name: string;
   lat: string;
   lon: string;
-  place_id: number;
+  place_id: string | number;
+}
+
+interface AiPlace {
+  title: string;
+  uri: string;
+  lat?: number;
+  lng?: number;
 }
 
 interface RequestRideScreenProps {
@@ -20,27 +28,31 @@ interface RequestRideScreenProps {
 const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, onBack }) => {
   const [rideType, setRideType] = useState<'now' | 'schedule'>('now');
   const [isSearching, setIsSearching] = useState(false);
+  const [searchMode, setSearchMode] = useState<'standard' | 'smart'>('standard');
   
   const [pickupLocation, setPickupLocation] = useState('Current Location');
   const [pickupCoords, setPickupCoords] = useState<[number, number] | null>(null);
   const [pickupResults, setPickupResults] = useState<SearchResult[]>([]);
+  const [isTrackingLive, setIsTrackingLive] = useState(true);
   
   const [destination, setDestination] = useState('');
   const [destCoords, setDestCoords] = useState<[number, number] | null>(null);
   const [destResults, setDestResults] = useState<SearchResult[]>([]);
+  const [aiPlaces, setAiPlaces] = useState<AiPlace[]>([]);
   
   const [activeSearchField, setActiveSearchField] = useState<'pickup' | 'destination' | null>(null);
   
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number]>([6.5244, 3.3792]);
+  const [userRealTimePos, setUserRealTimePos] = useState<[number, number] | null>(null);
   const [scheduleData, setScheduleData] = useState({
     date: '',
     time: ''
   });
 
-  // Fix: use 'any' instead of 'NodeJS.Timeout' to avoid namespace error in browser environments
   const searchTimeout = useRef<any>(null);
+  const watchIdRef = useRef<string | null>(null);
 
   const isScheduleValid = rideType === 'now' || (scheduleData.date && scheduleData.time);
 
@@ -48,26 +60,77 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     try {
       const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
       const data = await response.json();
-      return data.display_name || "Custom location";
+      
+      if (data.address) {
+        const addr = data.address;
+        const main = addr.amenity || addr.building || addr.road || addr.pedestrian || addr.suburb || addr.neighbourhood || addr.city_district;
+        const secondary = addr.suburb || addr.neighbourhood || addr.city || addr.town;
+        
+        if (main && secondary && main !== secondary) {
+          return `${main}, ${secondary}`;
+        }
+        if (main) return main;
+      }
+      
+      if (data.display_name) {
+        const parts = data.display_name.split(',');
+        return parts.slice(0, 2).join(',').trim();
+      }
+      
+      return "Selected Location";
     } catch (error) {
       console.error("Reverse geocode error:", error);
-      return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+      return "Current Location";
     }
   };
 
+  useEffect(() => {
+    const startTracking = async () => {
+      try {
+        const id = await Geolocation.watchPosition({
+          enableHighAccuracy: true,
+          timeout: 10000
+        }, (position) => {
+          if (position) {
+            const coords: [number, number] = [position.coords.latitude, position.coords.longitude];
+            setUserRealTimePos(coords);
+            if (isTrackingLive) {
+              setPickupCoords(coords);
+              setMapCenter(coords);
+              // Throttle reverse geocoding
+              if (!searchTimeout.current) {
+                searchTimeout.current = setTimeout(async () => {
+                  const addr = await reverseGeocode(coords[0], coords[1]);
+                  setPickupLocation(addr);
+                  searchTimeout.current = null;
+                }, 3000);
+              }
+            }
+          }
+        });
+        watchIdRef.current = id;
+      } catch (e) {
+        console.error("Tracking error", e);
+      }
+    };
+
+    startTracking();
+
+    return () => {
+      if (watchIdRef.current) {
+        Geolocation.clearWatch({ id: watchIdRef.current });
+      }
+    };
+  }, [isTrackingLive]);
+
   const handleGetLocation = async () => {
     CapacitorService.triggerHaptic();
-    setPickupLocation('Fetching location...');
-    const pos = await CapacitorService.getCurrentLocation();
-    if (pos) {
-      const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-      setMapCenter(coords);
-      setPickupCoords(coords);
-      setPickupLocation(`Current Location (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`);
-      setActiveSearchField(null);
-    } else {
-      setPickupLocation('Location Error');
-      setTimeout(() => setPickupLocation('Current Location'), 2000);
+    setIsTrackingLive(true);
+    if (userRealTimePos) {
+      setMapCenter(userRealTimePos);
+      setPickupCoords(userRealTimePos);
+      const address = await reverseGeocode(userRealTimePos[0], userRealTimePos[1]);
+      setPickupLocation(address);
     }
   };
 
@@ -86,10 +149,66 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     }
   };
 
+  const performSmartSearch = async (query: string) => {
+    if (!query || query.length < 3 || !process.env.API_KEY || !pickupCoords) return;
+    
+    setIsAiLoading(true);
+    setAiPlaces([]);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `I am looking for: ${query}. Please provide specific recommendations nearby.`,
+        config: {
+          tools: [{ googleMaps: {} }],
+          toolConfig: {
+            retrievalConfig: {
+              latLng: {
+                latitude: pickupCoords[0],
+                longitude: pickupCoords[1]
+              }
+            }
+          }
+        },
+      });
+
+      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const foundPlaces: AiPlace[] = [];
+      
+      for (const chunk of chunks) {
+        if (chunk.maps) {
+          foundPlaces.push({
+            title: chunk.maps.title,
+            uri: chunk.maps.uri
+          });
+        }
+      }
+
+      const enrichedPlaces = await Promise.all(foundPlaces.map(async (p) => {
+        try {
+          const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(p.title)}&limit=1&countrycodes=ng`);
+          const geoData = await geoRes.json();
+          if (geoData && geoData[0]) {
+            return { ...p, lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) };
+          }
+        } catch (e) {}
+        return p;
+      }));
+
+      setAiPlaces(enrichedPlaces);
+      setAiInsight(response.text || "Here are some recommendations nearby.");
+    } catch (error) {
+      console.error("Smart Search Error:", error);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   const handleInputChange = (val: string, field: 'pickup' | 'destination') => {
     if (field === 'pickup') {
       setPickupLocation(val);
       setActiveSearchField('pickup');
+      setIsTrackingLive(false); 
     } else {
       setDestination(val);
       setActiveSearchField('destination');
@@ -97,22 +216,49 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
 
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(() => {
-      searchPlaces(val, field);
-    }, 500);
+      if (searchMode === 'smart' && field === 'destination') {
+        performSmartSearch(val);
+      } else {
+        searchPlaces(val, field);
+      }
+    }, 800);
+  };
+
+  const handleManualSearch = (field: 'pickup' | 'destination') => {
+    CapacitorService.triggerHaptic();
+    const query = field === 'pickup' ? pickupLocation : destination;
+    setActiveSearchField(field);
+    searchPlaces(query, field);
   };
 
   const selectResult = (result: SearchResult, field: 'pickup' | 'destination') => {
     const coords: [number, number] = [parseFloat(result.lat), parseFloat(result.lon)];
     if (field === 'pickup') {
-      setPickupLocation(result.display_name);
+      setPickupLocation(result.display_name.split(',')[0]); 
       setPickupCoords(coords);
       setPickupResults([]);
+      setIsTrackingLive(false);
     } else {
-      setDestination(result.display_name);
+      setDestination(result.display_name.split(',')[0]);
       setDestCoords(coords);
       setDestResults([]);
+      setAiPlaces([]);
     }
     setMapCenter(coords);
+    setActiveSearchField(null);
+    CapacitorService.triggerHaptic();
+  };
+
+  const selectAiPlace = async (place: AiPlace) => {
+    setDestination(place.title);
+    if (place.lat && place.lng) {
+      const coords: [number, number] = [place.lat, place.lng];
+      setDestCoords(coords);
+      setMapCenter(coords);
+    } else {
+      searchPlaces(place.title, 'destination');
+    }
+    setAiPlaces([]);
     setActiveSearchField(null);
     CapacitorService.triggerHaptic();
   };
@@ -122,6 +268,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     const address = await reverseGeocode(newPos[0], newPos[1]);
     
     if (id === 'pickup') {
+      setIsTrackingLive(false);
       setPickupCoords(newPos);
       setPickupLocation(address);
     } else {
@@ -130,158 +277,80 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     }
   };
 
-  const getAiInsight = async (dest: string) => {
-    // Fix: access API_KEY directly from process.env as per guidelines
-    if (!dest || dest.length < 3 || !process.env.API_KEY) return;
-    
-    setIsAiLoading(true);
-    try {
-      // Fix: initialize GoogleGenAI with process.env.API_KEY directly and right before usage
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Provide a very short (max 15 words) helpful travel tip or traffic insight for a car trip to: ${dest} in the context of Lagos, Nigeria. Be professional and concise.`,
-      });
-      setAiInsight(response.text || "Safe journey ahead!");
-    } catch (error) {
-      console.error("AI Insight Error:", error);
-      setAiInsight(null);
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (destination && !activeSearchField) getAiInsight(destination);
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, [destination, activeSearchField]);
-
-  // Initial location fetch
-  useEffect(() => {
-    handleGetLocation();
-  }, []);
-
   const handleMainAction = () => {
     CapacitorService.triggerHaptic();
-    
-    if (rideType === 'schedule') {
-      if (!scheduleData.date || !scheduleData.time) {
-        alert("Please select both a date and time for your trip.");
-        return;
-      }
-      setIsSearching(true);
-      setTimeout(() => {
-        setIsSearching(false);
-        alert(`Success! Your ride for ${scheduleData.date} at ${scheduleData.time} has been scheduled. We'll remind you 30 minutes before.`);
-      }, 1500);
-    } else {
-      setIsSearching(true);
-      setTimeout(() => {
-        setIsSearching(false);
-        alert("Search initiated! We are connecting you with the nearest professional driver.");
-      }, 2000);
-    }
+    setIsSearching(true);
+    setTimeout(() => {
+      setIsSearching(false);
+      alert(rideType === 'now' ? "Search initiated! Connecting you with a driver." : "Success! Your ride has been scheduled.");
+    }, 2000);
   };
 
   const mapMarkers: any[] = [];
-  if (pickupCoords) mapMarkers.push({ id: 'pickup', position: pickupCoords, title: 'Pick-up (Drag to move)', icon: 'user', draggable: true });
-  if (destCoords) mapMarkers.push({ id: 'destination', position: destCoords, title: 'Destination (Drag to move)', icon: 'destination', draggable: true });
+  if (userRealTimePos) mapMarkers.push({ id: 'user-live', position: userRealTimePos, title: 'Your Position', icon: 'user', draggable: false });
+  if (pickupCoords) mapMarkers.push({ id: 'pickup', position: pickupCoords, title: 'Pick-up', icon: 'pickup', draggable: true });
+  if (destCoords) mapMarkers.push({ id: 'destination', position: destCoords, title: 'Destination', icon: 'destination', draggable: true });
+  
+  aiPlaces.forEach((p, idx) => {
+    if (p.lat && p.lng) {
+      mapMarkers.push({ id: `ai-${idx}`, position: [p.lat, p.lng], title: p.title, icon: 'pickup', draggable: false });
+    }
+  });
 
   return (
     <div className="h-screen w-full overflow-hidden flex flex-col relative bg-background-dark">
-      {/* Interactive Map Component */}
       <div className="absolute inset-0 z-0">
         <InteractiveMap 
           center={mapCenter} 
           markers={mapMarkers} 
           onMarkerDragEnd={handleMarkerDragEnd}
         />
-        {/* Gradients to blend map */}
         <div className="absolute inset-0 bg-gradient-to-b from-[#101622]/60 via-transparent to-[#101622]/90 pointer-events-none"></div>
       </div>
 
-      <div className="relative z-30 flex items-center justify-between p-4 pt-8 pb-4 bg-gradient-to-b from-background-dark/90 to-transparent">
-        <button 
-          onClick={onBack}
-          className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg hover:bg-surface-dark transition-colors active:scale-95"
-        >
+      <div className="relative z-30 flex items-center justify-between p-4 pt-8 pb-4">
+        <button onClick={onBack} className="bg-surface-dark/80 backdrop-blur-md text-white size-10 flex items-center justify-center rounded-full shadow-lg active:scale-95 transition-all">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
-        <div className="flex flex-col items-center">
-          <h2 className="text-white text-lg font-bold tracking-tight drop-shadow-md">Request a Driver</h2>
+        <div className="flex bg-surface-dark/80 backdrop-blur-md rounded-full p-1 border border-white/10">
+          <button 
+            onClick={() => { CapacitorService.triggerHaptic(); setSearchMode('standard'); setAiPlaces([]); }}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${searchMode === 'standard' ? 'bg-primary text-white' : 'text-slate-400'}`}
+          >
+            Direct
+          </button>
+          <button 
+            onClick={() => { CapacitorService.triggerHaptic(); setSearchMode('smart'); }}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${searchMode === 'smart' ? 'bg-primary text-white' : 'text-slate-400'}`}
+          >
+            <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+            Smart
+          </button>
         </div>
-        <button 
-          onClick={onOpenProfile}
-          className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg hover:bg-surface-dark transition-colors active:scale-95"
-        >
+        <button onClick={onOpenProfile} className="bg-surface-dark/80 backdrop-blur-md text-white size-10 flex items-center justify-center rounded-full shadow-lg active:scale-95 transition-all">
           <span className="material-symbols-outlined">person</span>
         </button>
       </div>
 
       <div className="flex-1"></div>
 
-      <div className="relative z-20 w-full bg-surface-dark rounded-t-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.4)] flex flex-col max-h-[90vh]">
-        <div className="w-full flex justify-center pt-3 pb-1">
-          <div className="h-1.5 w-12 rounded-full bg-slate-600"></div>
-        </div>
+      <div className="relative z-30 flex flex-col gap-2 p-4 items-end mb-2">
+        <button 
+          onClick={handleGetLocation} 
+          className={`bg-white text-primary p-3 rounded-full shadow-2xl active:scale-90 transition-all ${isTrackingLive ? 'ring-4 ring-primary/20' : ''}`}
+        >
+          <span className={`material-symbols-outlined ${isTrackingLive ? 'filled' : ''}`}>my_location</span>
+        </button>
+      </div>
+
+      <div className="relative z-20 w-full bg-surface-dark rounded-t-3xl shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="w-full flex justify-center pt-3 pb-1"><div className="h-1.5 w-12 rounded-full bg-slate-600"></div></div>
         
         <div className="p-6 pt-2 pb-8 flex flex-col gap-6 overflow-y-auto no-scrollbar">
           <div className="flex p-1 bg-input-dark rounded-xl">
-            <button 
-              onClick={() => { CapacitorService.triggerHaptic(); setRideType('now'); }}
-              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
-                rideType === 'now' ? 'bg-primary text-white shadow-md' : 'text-slate-400'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[18px]">bolt</span>
-              Ride Now
-            </button>
-            <button 
-              onClick={() => { CapacitorService.triggerHaptic(); setRideType('schedule'); }}
-              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
-                rideType === 'schedule' ? 'bg-primary text-white shadow-md' : 'text-slate-400'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[18px]">event</span>
-              Schedule
-            </button>
+            <button onClick={() => setRideType('now')} className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${rideType === 'now' ? 'bg-primary text-white shadow-md' : 'text-slate-400'}`}>Ride Now</button>
+            <button onClick={() => setRideType('schedule')} className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${rideType === 'schedule' ? 'bg-primary text-white shadow-md' : 'text-slate-400'}`}>Schedule</button>
           </div>
-
-          {rideType === 'schedule' && (
-            <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex flex-col gap-4 animate-in slide-in-from-top-4 duration-300">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="material-symbols-outlined text-primary text-[20px]">calendar_month</span>
-                <span className="text-sm font-bold text-white">Set Departure Time</span>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">Date</label>
-                  <div className="relative flex items-center bg-input-dark rounded-xl px-4 h-12 border border-slate-700/50 focus-within:border-primary/50 transition-colors">
-                    <input 
-                      className="bg-transparent border-none text-white text-sm font-medium w-full focus:ring-0 p-0 [color-scheme:dark]" 
-                      type="date" 
-                      min={new Date().toISOString().split('T')[0]}
-                      value={scheduleData.date}
-                      onChange={(e) => setScheduleData({...scheduleData, date: e.target.value})}
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">Time</label>
-                  <div className="relative flex items-center bg-input-dark rounded-xl px-4 h-12 border border-slate-700/50 focus-within:border-primary/50 transition-colors">
-                    <input 
-                      className="bg-transparent border-none text-white text-sm font-medium w-full focus:ring-0 p-0 [color-scheme:dark]" 
-                      type="time" 
-                      value={scheduleData.time}
-                      onChange={(e) => setScheduleData({...scheduleData, time: e.target.value})}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           <div className="flex gap-4">
             <div className="flex flex-col items-center pt-4 pb-2">
@@ -291,64 +360,71 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
             </div>
 
             <div className="flex flex-col gap-4 flex-1">
-              {/* Pickup Field */}
               <div className="group relative">
-                <label className="text-xs font-medium text-slate-400 mb-1 block pl-1">Pick-up Location</label>
+                <div className="flex items-center justify-between mb-1 pl-1">
+                  <label className="text-xs font-medium text-slate-400">Pick-up Point</label>
+                  {isTrackingLive && (
+                    <span className="text-[10px] font-bold text-primary flex items-center gap-1 animate-pulse">
+                      <span className="w-1.5 h-1.5 bg-primary rounded-full"></span> Live Tracking
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center bg-input-dark rounded-xl px-4 h-12 border border-slate-700/50 focus-within:border-primary/50 transition-colors">
-                  <input 
-                    className="bg-transparent border-none text-white placeholder-slate-500 text-sm font-medium w-full focus:ring-0 p-0" 
-                    placeholder="Where are you?" 
-                    type="text" 
-                    value={pickupLocation}
-                    onChange={(e) => handleInputChange(e.target.value, 'pickup')}
-                    onFocus={() => setActiveSearchField('pickup')}
-                  />
-                  <button onClick={handleGetLocation} className="active:scale-90 p-1">
-                    <span className="material-symbols-outlined text-primary text-[20px]">my_location</span>
-                  </button>
+                  <input className="bg-transparent border-none text-white text-sm font-bold w-full focus:ring-0 p-0" placeholder="Locating street..." type="text" value={pickupLocation} onChange={(e) => handleInputChange(e.target.value, 'pickup')} onFocus={() => setActiveSearchField('pickup')}/>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => handleManualSearch('pickup')} className="active:scale-90 p-1 text-slate-500 hover:text-primary transition-colors">
+                      <span className="material-symbols-outlined text-[20px]">search</span>
+                    </button>
+                    <button onClick={handleGetLocation} className={`active:scale-90 p-1 transition-colors ${isTrackingLive ? 'text-primary' : 'text-slate-500 hover:text-primary'}`}>
+                      <span className="material-symbols-outlined text-[20px]">my_location</span>
+                    </button>
+                  </div>
                 </div>
                 {activeSearchField === 'pickup' && pickupResults.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-2 bg-input-dark rounded-xl border border-slate-700/50 shadow-2xl z-50 overflow-hidden max-h-48 overflow-y-auto">
                     {pickupResults.map((res) => (
-                      <button 
-                        key={res.place_id}
-                        onClick={() => selectResult(res, 'pickup')}
-                        className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-slate-700/50 border-b border-slate-700/30 last:border-0 flex items-center gap-3"
-                      >
+                      <button key={res.place_id} onClick={() => selectResult(res, 'pickup')} className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-slate-700/50 border-b border-slate-700/30 last:border-0 flex items-center gap-3">
                         <span className="material-symbols-outlined text-slate-500 text-[18px]">location_on</span>
-                        <span className="truncate">{res.display_name}</span>
+                        <div className="flex flex-col">
+                          <span className="truncate font-bold">{res.display_name.split(',')[0]}</span>
+                          <span className="truncate text-[10px] text-slate-500">{res.display_name.split(',').slice(1).join(',')}</span>
+                        </div>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Destination Field */}
               <div className="group relative">
-                <label className="text-xs font-medium text-slate-400 mb-1 block pl-1">Destination</label>
+                <label className="text-xs font-medium text-slate-400 mb-1 block pl-1">Destination {searchMode === 'smart' && <span className="text-primary font-bold">(Smart)</span>}</label>
                 <div className="flex items-center bg-input-dark rounded-xl px-4 h-12 border border-slate-700/50 focus-within:border-primary/50 transition-colors">
-                  <input 
-                    className="bg-transparent border-none text-white placeholder-slate-500 text-sm font-medium w-full focus:ring-0 p-0" 
-                    placeholder="Enter destination" 
-                    type="text" 
-                    value={destination}
-                    onChange={(e) => handleInputChange(e.target.value, 'destination')}
-                    onFocus={() => setActiveSearchField('destination')}
-                  />
-                  <span className={`material-symbols-outlined text-[20px] ml-2 transition-colors ${isAiLoading ? 'text-primary animate-pulse' : 'text-slate-500'}`}>
-                    {isAiLoading ? 'auto_awesome' : 'search'}
-                  </span>
+                  <input className="bg-transparent border-none text-white text-sm font-bold w-full focus:ring-0 p-0" placeholder={searchMode === 'smart' ? "Try 'Sushi restaurants nearby'" : "Where to?"} type="text" value={destination} onChange={(e) => handleInputChange(e.target.value, 'destination')} onFocus={() => setActiveSearchField('destination')}/>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => handleManualSearch('destination')} className={`active:scale-90 p-1 transition-colors ${isAiLoading ? 'text-primary animate-pulse' : 'text-slate-500 hover:text-primary'}`}>
+                      <span className="material-symbols-outlined text-[20px]">
+                        {searchMode === 'smart' ? 'auto_awesome' : 'search'}
+                      </span>
+                    </button>
+                  </div>
                 </div>
-                {activeSearchField === 'destination' && destResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-input-dark rounded-xl border border-slate-700/50 shadow-2xl z-50 overflow-hidden max-h-48 overflow-y-auto">
-                    {destResults.map((res) => (
-                      <button 
-                        key={res.place_id}
-                        onClick={() => selectResult(res, 'destination')}
-                        className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-slate-700/50 border-b border-slate-700/30 last:border-0 flex items-center gap-3"
-                      >
+                
+                {activeSearchField === 'destination' && (destResults.length > 0 || aiPlaces.length > 0) && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-input-dark rounded-xl border border-slate-700/50 shadow-2xl z-50 overflow-hidden max-h-64 overflow-y-auto">
+                    {searchMode === 'smart' ? aiPlaces.map((p, idx) => (
+                      <div key={idx} className="border-b border-slate-700/30 last:border-0">
+                        <button onClick={() => selectAiPlace(p)} className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700/50 flex flex-col gap-0.5">
+                          <span className="font-bold flex items-center gap-2"><span className="material-symbols-outlined text-primary text-[16px]">stars</span>{p.title}</span>
+                          <span className="text-[10px] text-slate-500">AI Discovery Recommendation</span>
+                        </button>
+                        <a href={p.uri} target="_blank" rel="noopener noreferrer" className="block px-4 pb-2 text-[10px] text-primary hover:underline">View Place Profile</a>
+                      </div>
+                    )) : destResults.map((res) => (
+                      <button key={res.place_id} onClick={() => selectResult(res, 'destination')} className="w-full px-4 py-3 text-left text-sm text-slate-300 hover:bg-slate-700/50 border-b border-slate-700/30 last:border-0 flex items-center gap-3">
                         <span className="material-symbols-outlined text-slate-500 text-[18px]">map</span>
-                        <span className="truncate">{res.display_name}</span>
+                        <div className="flex flex-col">
+                          <span className="truncate font-bold">{res.display_name.split(',')[0]}</span>
+                          <span className="truncate text-[10px] text-slate-500">{res.display_name.split(',').slice(1).join(',')}</span>
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -357,15 +433,15 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
             </div>
           </div>
 
-          {(aiInsight || isAiLoading) && !activeSearchField && (
-            <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex gap-3 animate-in fade-in slide-in-from-top-2 duration-500">
+          {(aiInsight || isAiLoading) && (
+            <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 flex gap-3 animate-in fade-in slide-in-from-top-2 duration-500">
               <span className={`material-symbols-outlined text-primary text-[20px] shrink-0 ${isAiLoading ? 'animate-spin' : ''}`}>
                 {isAiLoading ? 'progress_activity' : 'auto_awesome'}
               </span>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[10px] font-bold text-primary uppercase tracking-wider">AI Travel Insight</span>
+                <span className="text-[10px] font-bold text-primary uppercase tracking-wider">AI Search Engine</span>
                 <p className="text-xs text-slate-300 font-medium leading-relaxed italic">
-                  {isAiLoading ? "Analyzing destination..." : aiInsight}
+                  {isAiLoading ? "Processing real-time map data..." : aiInsight}
                 </p>
               </div>
             </div>
@@ -374,35 +450,24 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
           <div className="mt-2 space-y-4">
             <div className="flex items-center justify-between px-2">
               <div className="flex flex-col">
-                <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Estimated Price</span>
+                <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Estimated Fare</span>
                 <div className="flex items-baseline gap-1">
                   <span className="text-2xl font-bold text-white">₦15,000</span>
                   <span className="text-sm font-medium text-slate-400">- ₦20,000</span>
                 </div>
               </div>
-              <div className="flex items-center gap-2 bg-input-dark px-3 py-1.5 rounded-lg border border-slate-700/50 cursor-pointer hover:bg-slate-700/50 active:scale-95 transition-transform">
+              <div className="flex items-center gap-2 bg-input-dark px-3 py-1.5 rounded-lg border border-slate-700/50">
                 <span className="material-symbols-outlined text-slate-400 text-[16px]">credit_card</span>
                 <span className="text-xs font-semibold text-slate-300">Personal • 4288</span>
-                <span className="material-symbols-outlined text-slate-500 text-[16px]">keyboard_arrow_down</span>
               </div>
             </div>
             
             <button 
               onClick={handleMainAction}
-              disabled={isSearching || !isScheduleValid}
-              className={`w-full ${isSearching ? 'bg-slate-600' : isScheduleValid ? 'bg-primary hover:bg-blue-600 active:bg-blue-700' : 'bg-slate-700 opacity-50 cursor-not-allowed'} text-white font-bold text-lg py-4 rounded-xl shadow-lg shadow-primary/25 flex items-center justify-center gap-2 transition-all transform active:scale-[0.98]`}
+              disabled={isSearching || !isScheduleValid || !destination}
+              className={`w-full ${isSearching ? 'bg-slate-600' : isScheduleValid && destination ? 'bg-primary hover:bg-blue-600' : 'bg-slate-700 opacity-50 cursor-not-allowed'} text-white font-bold text-lg py-4 rounded-xl shadow-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-2`}
             >
-              {isSearching ? (
-                <>
-                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                  <span>{rideType === 'now' ? 'Searching...' : 'Scheduling...'}</span>
-                </>
-              ) : (
-                <>
-                  <span>{rideType === 'now' ? 'Find a Driver' : 'Confirm Schedule'}</span>
-                  <span className="material-symbols-outlined">{rideType === 'now' ? 'arrow_forward' : 'check_circle'}</span>
-                </>
-              )}
+              {isSearching ? <span className="material-symbols-outlined animate-spin">progress_activity</span> : <span>{rideType === 'now' ? 'Request Professional Driver' : 'Confirm Schedule'}</span>}
             </button>
           </div>
         </div>
