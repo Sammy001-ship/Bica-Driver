@@ -48,6 +48,10 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
   const [locationAccuracy, setLocationAccuracy] = useState<number>(0);
   const [areaKeywords, setAreaKeywords] = useState(DEFAULT_KEYWORDS);
 
+  // Improved Scheduling State
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
+
   const searchTimeout = useRef<any>(null);
   const watchIdRef = useRef<number | null>(null);
 
@@ -208,12 +212,38 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     }
   };
 
-  // Added handleKeywordTap to resolve "Cannot find name 'handleKeywordTap'" error
   const handleKeywordTap = (label: string) => {
     CapacitorService.triggerHaptic();
     setDestination(label);
     setActiveSearchField('destination');
     aiResolveLocation(label, 'destination');
+  };
+
+  const isFormValid = () => {
+    if (rideType === 'now') {
+      return !!destination;
+    } else {
+      return !!destination && !!scheduledDate && !!scheduledTime;
+    }
+  };
+
+  const setQuickDate = (type: 'today' | 'tomorrow') => {
+    CapacitorService.triggerHaptic();
+    const date = new Date();
+    if (type === 'tomorrow') date.setDate(date.getDate() + 1);
+    setScheduledDate(date.toISOString().split('T')[0]);
+  };
+
+  const getFriendlyScheduleText = () => {
+    if (!scheduledDate || !scheduledTime) return "Select preferred arrival window";
+    const dateObj = new Date(`${scheduledDate}T${scheduledTime}`);
+    const now = new Date();
+    const isToday = now.toDateString() === dateObj.toDateString();
+    
+    const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const timeStr = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    
+    return `Driver will arrive ${isToday ? 'Today' : dayName} at ${timeStr}`;
   };
 
   const mapMarkers: any[] = [];
@@ -233,18 +263,16 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
         <div className="absolute inset-0 bg-gradient-to-b from-background-dark/40 via-transparent to-background-dark/95 pointer-events-none"></div>
       </div>
 
-      {/* Floating UI Overlay */}
+      {/* Floating Header */}
       <div className="relative z-30 flex items-center justify-between p-4 pt-10">
         <button onClick={onBack} className="bg-surface-dark/95 backdrop-blur-3xl text-white size-12 flex items-center justify-center rounded-2xl shadow-2xl border border-white/10 active:scale-90 transition-all">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         
-        {locationAccuracy > 0 && (
-          <div className="bg-accent/10 backdrop-blur-xl border border-accent/30 px-4 py-2 rounded-full flex items-center gap-2 animate-fade-in">
-            <div className="w-2 h-2 rounded-full bg-accent animate-pulse"></div>
-            <span className="text-[10px] font-black text-accent uppercase tracking-widest">Accuracy Lock</span>
-          </div>
-        )}
+        <div className="bg-accent/10 backdrop-blur-xl border border-accent/30 px-4 py-2 rounded-full flex items-center gap-2 animate-fade-in shadow-xl">
+          <div className="w-2 h-2 rounded-full bg-accent animate-pulse"></div>
+          <span className="text-[10px] font-black text-accent uppercase tracking-widest">Precision Tracking</span>
+        </div>
 
         <button onClick={onOpenProfile} className="bg-surface-dark/95 backdrop-blur-3xl text-white size-12 flex items-center justify-center rounded-2xl shadow-2xl border border-white/10 active:scale-90 transition-all">
           <span className="material-symbols-outlined">person</span>
@@ -253,7 +281,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
 
       <div className="flex-1"></div>
 
-      {/* Re-center Control */}
+      {/* Map Control */}
       <div className="relative z-30 p-4 flex justify-end">
         <button 
           onClick={handleLocateMe}
@@ -264,32 +292,59 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
         </button>
       </div>
 
-      {/* Main Bottom Interface */}
+      {/* Main Bottom Sheet Interface */}
       <div className="relative z-20 w-full bg-surface-dark rounded-t-[3.5rem] shadow-[0_-30px_80px_rgba(0,0,0,0.9)] border-t border-white/5 flex flex-col max-h-[85vh]">
         <div className="w-full flex justify-center py-5"><div className="h-1.5 w-16 rounded-full bg-slate-700/40"></div></div>
         
         <div className="px-7 pb-12 flex flex-col gap-6 overflow-y-auto no-scrollbar">
-          {/* Related Discovery Chips */}
-          <div className="flex flex-col gap-2">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] ml-1">Popular Nearby</span>
-            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2 px-1">
-              {areaKeywords.map((kw, i) => (
-                <button 
-                  key={i}
-                  onClick={() => handleKeywordTap(kw.label)}
-                  className="flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-input-dark/60 border border-white/5 hover:border-accent/50 hover:bg-accent/10 transition-all shrink-0 active:scale-95 group shadow-lg"
-                >
-                  <span className="material-symbols-outlined text-sm text-slate-500 group-hover:text-accent transition-colors">{kw.icon}</span>
-                  <span className="text-[11px] font-black text-slate-300 group-hover:text-white uppercase tracking-wider">{kw.label}</span>
-                </button>
-              ))}
-            </div>
+          
+          <div className="flex p-1.5 bg-input-dark rounded-[2.5rem] border border-white/5 shadow-inner">
+            <button onClick={() => setRideType('now')} className={`flex-1 py-4 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.15em] transition-all ${rideType === 'now' ? 'bg-primary text-white shadow-2xl scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}>Ride Now</button>
+            <button onClick={() => setRideType('schedule')} className={`flex-1 py-4 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.15em] transition-all ${rideType === 'schedule' ? 'bg-primary text-white shadow-2xl scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}>Schedule</button>
           </div>
 
-          <div className="flex p-1.5 bg-input-dark rounded-[2rem] border border-white/5 shadow-inner">
-            <button onClick={() => setRideType('now')} className={`flex-1 py-4 rounded-3xl text-[11px] font-black uppercase tracking-[0.15em] transition-all ${rideType === 'now' ? 'bg-primary text-white shadow-2xl' : 'text-slate-500'}`}>Ride Now</button>
-            <button onClick={() => setRideType('schedule')} className={`flex-1 py-4 rounded-3xl text-[11px] font-black uppercase tracking-[0.15em] transition-all ${rideType === 'schedule' ? 'bg-primary text-white shadow-2xl' : 'text-slate-500'}`}>Schedule</button>
-          </div>
+          {/* Premium Scheduling System */}
+          {rideType === 'schedule' && (
+            <div className="flex flex-col gap-4 animate-slide-up stagger-1">
+              <div className="flex items-center justify-between ml-1">
+                <span className="text-[10px] font-black text-accent uppercase tracking-[0.25em]">Departure Window</span>
+                <div className="flex gap-2">
+                  <button onClick={() => setQuickDate('today')} className="text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent hover:bg-accent/20 transition-all active:scale-90">Today</button>
+                  <button onClick={() => setQuickDate('tomorrow')} className="text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-white transition-all active:scale-90">Tomorrow</button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="relative group">
+                   <div className="absolute left-5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors group-focus-within:text-accent">
+                     <span className="material-symbols-outlined text-xl text-slate-500">event</span>
+                   </div>
+                   <input 
+                    type="date"
+                    className="w-full bg-input-dark rounded-3xl pl-14 pr-5 h-16 border border-white/5 text-white text-sm font-bold focus:ring-2 focus:ring-accent focus:border-transparent transition-all color-scheme-dark shadow-xl"
+                    value={scheduledDate}
+                    onChange={(e) => { CapacitorService.triggerHaptic(); setScheduledDate(e.target.value); }}
+                   />
+                </div>
+                <div className="relative group">
+                   <div className="absolute left-5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors group-focus-within:text-accent">
+                     <span className="material-symbols-outlined text-xl text-slate-500">schedule</span>
+                   </div>
+                   <input 
+                    type="time"
+                    className="w-full bg-input-dark rounded-3xl pl-14 pr-5 h-16 border border-white/5 text-white text-sm font-bold focus:ring-2 focus:ring-accent focus:border-transparent transition-all color-scheme-dark shadow-xl"
+                    value={scheduledTime}
+                    onChange={(e) => { CapacitorService.triggerHaptic(); setScheduledTime(e.target.value); }}
+                   />
+                </div>
+              </div>
+
+              <div className="bg-accent/5 border border-accent/10 rounded-2xl p-4 flex items-center gap-3 animate-fade-in">
+                 <span className="material-symbols-outlined text-accent text-lg filled">verified</span>
+                 <p className="text-[11px] font-bold text-slate-300 italic">{getFriendlyScheduleText()}</p>
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-5">
             <div className="flex flex-col items-center pt-8 pb-4">
@@ -299,13 +354,13 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
             </div>
 
             <div className="flex flex-col gap-8 flex-1">
-              {/* Pickup */}
+              {/* Pickup Input */}
               <div className="relative">
                 <div className="flex items-center justify-between mb-2 ml-1">
                   <label className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Direct Pickup</label>
-                  {isTrackingLive && <span className="text-[9px] font-black text-accent uppercase bg-accent/10 px-2 py-0.5 rounded">Live Map</span>}
+                  {isTrackingLive && <span className="text-[9px] font-black text-accent uppercase bg-accent/10 px-2 py-0.5 rounded animate-pulse">Live Radar</span>}
                 </div>
-                <div className={`flex items-center bg-input-dark rounded-[1.5rem] px-5 h-16 border transition-all shadow-xl ${activeSearchField === 'pickup' ? 'border-primary shadow-primary/10' : 'border-white/5'}`}>
+                <div className={`flex items-center bg-input-dark rounded-[1.75rem] px-5 h-16 border transition-all shadow-xl ${activeSearchField === 'pickup' ? 'border-primary shadow-primary/10 ring-2 ring-primary/20' : 'border-white/5'}`}>
                   <input 
                     className="bg-transparent border-none text-white text-[16px] font-bold w-full focus:ring-0 p-0 placeholder-slate-700" 
                     placeholder="Where are you?"
@@ -319,7 +374,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
                   {isAiLoading && activeSearchField === 'pickup' && <span className="material-symbols-outlined animate-spin text-accent ml-1">progress_activity</span>}
                 </div>
                 {activeSearchField === 'pickup' && pickupResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-4 bg-surface-dark rounded-3xl border border-white/10 shadow-[0_30px_80px_rgba(0,0,0,0.8)] z-[60] overflow-hidden animate-scale-in max-h-64 overflow-y-auto">
+                  <div className="absolute top-full left-0 right-0 mt-4 bg-surface-dark rounded-3xl border border-white/10 shadow-[0_30px_80px_rgba(0,0,0,0.8)] z-[60] overflow-hidden animate-scale-in max-h-64 overflow-y-auto no-scrollbar">
                     {pickupResults.map(res => (
                       <button key={res.id} onClick={() => selectResult(res, 'pickup')} className="w-full p-5 text-left border-b border-white/5 hover:bg-primary/10 flex flex-col gap-1 group transition-all">
                         <div className="flex items-center gap-3">
@@ -333,10 +388,10 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
                 )}
               </div>
 
-              {/* Destination */}
+              {/* Destination Input */}
               <div className="relative">
                 <label className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2 block ml-1">Destination Address</label>
-                <div className={`flex items-center bg-input-dark rounded-[1.5rem] px-5 h-16 border transition-all shadow-xl ${activeSearchField === 'destination' ? 'border-primary shadow-primary/10' : 'border-white/5'}`}>
+                <div className={`flex items-center bg-input-dark rounded-[1.75rem] px-5 h-16 border transition-all shadow-xl ${activeSearchField === 'destination' ? 'border-primary shadow-primary/10 ring-2 ring-primary/20' : 'border-white/5'}`}>
                   <input 
                     className="bg-transparent border-none text-white text-[16px] font-bold w-full focus:ring-0 p-0 placeholder-slate-700" 
                     placeholder="Where to?"
@@ -350,7 +405,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
                   {isAiLoading && activeSearchField === 'destination' && <span className="material-symbols-outlined animate-spin text-accent ml-1">progress_activity</span>}
                 </div>
                 {activeSearchField === 'destination' && destResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-4 bg-surface-dark rounded-3xl border border-white/10 shadow-[0_30px_80px_rgba(0,0,0,0.8)] z-[60] overflow-hidden animate-scale-in max-h-64 overflow-y-auto">
+                  <div className="absolute top-full left-0 right-0 mt-4 bg-surface-dark rounded-3xl border border-white/10 shadow-[0_30px_80px_rgba(0,0,0,0.8)] z-[60] overflow-hidden animate-scale-in max-h-64 overflow-y-auto no-scrollbar">
                     {destResults.map(res => (
                       <button key={res.id} onClick={() => selectResult(res, 'destination')} className="w-full p-5 text-left border-b border-white/5 hover:bg-primary/10 flex flex-col gap-1 group transition-all">
                         <div className="flex items-center gap-3">
@@ -366,23 +421,42 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
             </div>
           </div>
 
-          {aiInsight && !isAiLoading && (
-            <div className="bg-primary/10 border border-primary/30 rounded-3xl p-6 flex gap-5 animate-slide-up shadow-xl">
-              <div className="bg-primary/20 p-3 rounded-2xl shrink-0 h-fit">
+          {/* Related Discovery Chips */}
+          {!activeSearchField && (
+            <div className="flex flex-col gap-2 mt-2 animate-fade-in">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] ml-1">Popular Nearby</span>
+              <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2 px-1">
+                {areaKeywords.map((kw, i) => (
+                  <button 
+                    key={i}
+                    onClick={() => handleKeywordTap(kw.label)}
+                    className="flex items-center gap-2.5 px-5 py-3.5 rounded-2xl bg-input-dark/60 border border-white/5 hover:border-accent/50 hover:bg-accent/10 transition-all shrink-0 active:scale-95 group shadow-lg"
+                  >
+                    <span className="material-symbols-outlined text-sm text-slate-500 group-hover:text-accent transition-colors">{kw.icon}</span>
+                    <span className="text-[11px] font-black text-slate-300 group-hover:text-white uppercase tracking-wider">{kw.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {aiInsight && !isAiLoading && !activeSearchField && (
+            <div className="bg-primary/10 border border-primary/30 rounded-[2rem] p-6 flex gap-5 animate-slide-up shadow-xl">
+              <div className="bg-primary/20 p-3.5 rounded-2xl shrink-0 h-fit">
                 <span className="material-symbols-outlined text-accent text-2xl filled">auto_awesome</span>
               </div>
               <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-black text-accent uppercase tracking-[0.3em]">AI Direct Intelligence</span>
+                <span className="text-[10px] font-black text-accent uppercase tracking-[0.3em]">Direct AI Intelligence</span>
                 <p className="text-[13px] text-slate-300 leading-relaxed font-bold italic opacity-90">{aiInsight}</p>
               </div>
             </div>
           )}
 
-          {/* Pricing & Booking */}
+          {/* Pricing & Final Booking Action */}
           <div className="mt-6 space-y-10">
             <div className="flex items-center justify-between px-3">
               <div className="flex flex-col">
-                <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.25em] mb-2">Estimated Fare</span>
+                <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.25em] mb-2">Service Estimate</span>
                 <div className="flex items-baseline gap-2">
                   <span className="text-[34px] font-black text-white tracking-tighter">₦15,000</span>
                   <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Fixed</span>
@@ -398,18 +472,21 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
               onClick={() => {
                 CapacitorService.triggerHaptic();
                 setIsSearching(true);
-                setTimeout(() => { setIsSearching(false); alert("Requesting Professional Chauffeur..."); }, 1500);
+                setTimeout(() => { 
+                  setIsSearching(false); 
+                  alert(rideType === 'now' ? "Requesting Professional Chauffeur..." : `Professional Chauffeur Scheduled for ${scheduledDate} at ${scheduledTime}`); 
+                }, 1500);
               }}
-              disabled={!destination || isSearching}
-              className={`w-full h-20 rounded-[2rem] font-black text-[17px] uppercase tracking-[0.15em] flex items-center justify-center gap-4 shadow-[0_25px_60px_rgba(0,0,0,0.5)] transition-all active:scale-[0.97] ${
+              disabled={!isFormValid() || isSearching}
+              className={`w-full h-20 rounded-[2.25rem] font-black text-[17px] uppercase tracking-[0.15em] flex items-center justify-center gap-4 shadow-[0_25px_60px_rgba(0,0,0,0.5)] transition-all active:scale-[0.97] ${
                 isSearching ? 'bg-slate-700' : 
-                destination ? 'bg-primary text-white hover:brightness-110 shadow-primary/30' : 
-                'bg-slate-800 text-slate-600'
+                isFormValid() ? 'bg-primary text-white hover:brightness-110 shadow-primary/30' : 
+                'bg-slate-800 text-slate-600 cursor-not-allowed opacity-50'
               }`}
             >
               {isSearching ? <span className="material-symbols-outlined animate-spin">progress_activity</span> : (
                 <>
-                  <span>Request Driver</span>
+                  <span>{rideType === 'now' ? 'Request Chauffeur' : 'Confirm Schedule'}</span>
                   <span className="material-symbols-outlined text-3xl">trending_flat</span>
                 </>
               )}
