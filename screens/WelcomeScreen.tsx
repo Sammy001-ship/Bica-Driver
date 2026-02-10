@@ -10,13 +10,13 @@ interface WelcomeScreenProps {
 const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onCreateAccount, onLogin }) => {
   return (
     <div className="relative h-screen flex flex-col bg-background-light dark:bg-background-dark overflow-hidden">
-      <div className="absolute top-[-20%] left-[-20%] w-[140%] h-[60%] rounded-full bg-primary/10 blur-[100px] pointer-events-none animate-fade-in"></div>
+      <div className="absolute top-[-20%] left-[-20%] w-[140%] h-[60%] rounded-full bg-primary/20 blur-[120px] pointer-events-none animate-fade-in"></div>
       
       <div className="h-12 w-full"></div>
       
       <div className="flex items-center justify-center px-6 py-2 z-10 animate-slide-up">
         <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-primary text-white shadow-lg shadow-primary/20">
+          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-primary text-white shadow-lg shadow-primary/30">
             <span className="material-symbols-outlined text-xl">directions_car</span>
           </div>
           <span className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">Bicadriver</span>
@@ -34,13 +34,13 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onCreateAccount, onLogin 
                style={{ backgroundImage: `url('${IMAGES.WELCOME_HERO}')` }}
             />
           </div>
-          <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-white/10 dark:bg-gray-800/80 backdrop-blur-xl px-5 py-4 rounded-3xl shadow-2xl border border-white/20 w-[90%] animate-slide-up stagger-1 opacity-0" style={{ animationFillMode: 'forwards' }}>
-            <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-green-500/20 text-green-500">
+          <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-white/10 dark:bg-[#044422]/90 backdrop-blur-xl px-5 py-4 rounded-3xl shadow-2xl border border-white/20 w-[90%] animate-slide-up stagger-1 opacity-0" style={{ animationFillMode: 'forwards' }}>
+            <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-accent/20 text-accent">
               <span className="material-symbols-outlined filled">verified_user</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest leading-none mb-1">System Status</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-white">Professional Drivers Online</span>
+              <span className="text-[10px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-widest leading-none mb-1">System Status</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-white">Chauffeurs Online</span>
             </div>
           </div>
         </div>
@@ -48,10 +48,10 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onCreateAccount, onLogin 
         <div className="flex flex-col items-center text-center mt-6 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
           <h1 className="text-[34px] font-black text-gray-900 dark:text-white leading-[1.1] mb-5 tracking-tight">
             Your Premium Car, <br/>
-            <span className="text-primary">Our Professional Driver.</span>
+            <span className="text-accent">Our Verified Driver.</span>
           </h1>
           <p className="text-base text-gray-600 dark:text-slate-400 max-w-[300px] leading-relaxed font-medium">
-            The elite connection for luxury car owners and verified chauffeurs. Safety and comfort guaranteed.
+            The elite connection for luxury car owners and professional chauffeurs in Nigeria.
           </p>
         </div>
       </div>
@@ -59,19 +59,19 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onCreateAccount, onLogin 
       <div className="w-full p-6 pb-12 flex flex-col gap-4 z-20 animate-slide-up stagger-3 opacity-0" style={{ animationFillMode: 'forwards' }}>
         <button 
           onClick={onCreateAccount}
-          className="flex w-full items-center justify-center rounded-[1.25rem] h-16 px-5 bg-primary hover:bg-blue-600 transition-all text-white text-[17px] font-black shadow-xl shadow-primary/25 active:scale-[0.97]"
+          className="flex w-full items-center justify-center rounded-[1.25rem] h-16 px-5 bg-primary hover:bg-[#056d32] transition-all text-white text-[17px] font-black shadow-xl shadow-primary/30 active:scale-[0.97]"
         >
           Get Started
         </button>
         <button 
           onClick={onLogin}
-          className="flex w-full items-center justify-center rounded-[1.25rem] h-16 px-5 bg-white/5 border border-gray-300 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-all text-gray-900 dark:text-white text-[17px] font-bold active:scale-[0.97]"
+          className="flex w-full items-center justify-center rounded-[1.25rem] h-16 px-5 bg-white/5 border border-gray-300 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10 transition-all text-gray-900 dark:text-white text-[17px] font-bold active:scale-[0.97]"
         >
           Sign In
         </button>
         <div className="flex items-center justify-center gap-4 mt-2">
           <p className="text-[11px] text-gray-500 dark:text-slate-500 font-medium tracking-tight">
-            By continuing, you agree to our <span className="text-primary font-bold cursor-pointer hover:underline">Terms</span>.
+            Safety first. Read our <span className="text-accent font-bold cursor-pointer hover:underline">Guidelines</span>.
           </p>
         </div>
       </div>

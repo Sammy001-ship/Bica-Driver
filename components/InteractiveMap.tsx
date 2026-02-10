@@ -32,11 +32,15 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const L = (window as any).L;
     const map = L.map(mapContainerRef.current, {
       zoomControl: false,
-      attributionControl: true
+      attributionControl: false,
+      scrollWheelZoom: true,
+      fadeAnimation: true,
+      markerZoomAnimation: true,
+      zoomSnap: 0.1
     }).setView(center, zoom);
 
+    // Dark Map Tiles
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
       subdomains: 'abcd',
       maxZoom: 20
     }).addTo(map);
@@ -54,9 +58,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   useEffect(() => {
     if (mapInstanceRef.current) {
-      mapInstanceRef.current.setView(center, zoom, { animate: true, duration: 1.0 });
+      mapInstanceRef.current.setView(center, zoom, {
+        animate: true,
+        pan: { duration: 1.5 },
+        zoom: { animate: true }
+      });
     }
-  }, [center]);
+  }, [center, zoom]);
 
   useEffect(() => {
     if (!mapInstanceRef.current || !markersLayerRef.current) return;
@@ -69,36 +77,44 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       if (marker.icon === 'user') {
         icon = L.divIcon({
           className: 'custom-div-icon',
-          html: '<div class="custom-location-dot"></div>',
-          iconSize: [12, 12],
-          iconAnchor: [6, 6]
+          html: `
+            <div class="relative flex items-center justify-center">
+              <div class="absolute w-16 h-16 bg-accent/10 rounded-full animate-ping"></div>
+              <div class="absolute w-10 h-10 bg-accent/20 rounded-full animate-soft-pulse"></div>
+              <div class="z-10 w-4 h-4 bg-accent border-2 border-white rounded-full shadow-[0_0_15px_#f17606]"></div>
+            </div>`,
+          iconSize: [64, 64],
+          iconAnchor: [32, 32]
         });
       } else if (marker.icon === 'pickup') {
         icon = L.divIcon({
           className: 'custom-div-icon',
-          html: `<div class="bg-primary/20 p-2 rounded-full border border-primary/50 flex items-center justify-center shadow-lg">
-                  <div class="w-3 h-3 bg-primary rounded-full ring-2 ring-white"></div>
+          html: `<div class="relative flex items-center justify-center">
+                  <div class="absolute w-14 h-14 bg-accent/15 rounded-full animate-ping opacity-75"></div>
+                  <div class="z-10 bg-surface-dark p-2.5 rounded-2xl border-2 border-accent flex items-center justify-center shadow-[0_15px_30px_rgba(241,118,6,0.5)]">
+                    <div class="w-3.5 h-3.5 bg-accent rounded-full shadow-[0_0_8px_#f17606]"></div>
+                  </div>
                 </div>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14]
+          iconSize: [56, 56],
+          iconAnchor: [28, 28]
         });
       } else if (marker.icon === 'taxi') {
         icon = L.divIcon({
           className: 'custom-div-icon',
-          html: `<div class="bg-primary text-white p-1.5 rounded-full shadow-lg border-2 border-white animate-bounce">
-                  <span class="material-symbols-outlined text-[16px] block">local_taxi</span>
+          html: `<div class="bg-primary text-white p-2.5 rounded-2xl shadow-2xl border-2 border-white/20 animate-bounce">
+                  <span class="material-symbols-outlined text-[18px] block filled">local_taxi</span>
                 </div>`,
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
+          iconSize: [40, 40],
+          iconAnchor: [20, 20]
         });
       } else if (marker.icon === 'destination') {
         icon = L.divIcon({
           className: 'custom-div-icon',
-          html: `<div class="bg-white text-primary p-1 rounded-sm shadow-xl border-2 border-primary">
-                  <span class="material-symbols-outlined text-[18px] block filled">location_on</span>
+          html: `<div class="bg-white text-primary p-2 rounded-xl shadow-2xl border-2 border-primary flex items-center justify-center">
+                  <span class="material-symbols-outlined text-[24px] block filled">location_on</span>
                 </div>`,
-          iconSize: [24, 24],
-          iconAnchor: [12, 24]
+          iconSize: [40, 40],
+          iconAnchor: [20, 40]
         });
       }
 
@@ -106,7 +122,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         icon: icon || L.Icon.Default,
         draggable: !!marker.draggable
       })
-      .bindPopup(marker.title)
+      .bindPopup(`<div class="font-display font-black text-[12px] p-1 text-[#032e02] uppercase tracking-widest">${marker.title}</div>`, {
+        closeButton: false,
+        className: 'custom-map-popup'
+      })
       .addTo(markersLayerRef.current);
 
       if (marker.draggable && onMarkerDragEnd) {

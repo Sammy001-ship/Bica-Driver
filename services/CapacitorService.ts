@@ -7,12 +7,10 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 export const CapacitorService = {
   async getCurrentLocation() {
     try {
-      // Try Capacitor first
       const coordinates = await Geolocation.getCurrentPosition();
       return coordinates;
     } catch (e) {
       console.warn('Capacitor Geolocation failed, trying web fallback...', e);
-      // Fallback to Web Geolocation API
       return new Promise((resolve) => {
         if ("geolocation" in navigator) {
           navigator.geolocation.getCurrentPosition(
@@ -53,13 +51,10 @@ export const CapacitorService = {
       return `data:image/jpeg;base64,${image.base64String}`;
     } catch (e) {
       console.warn('Capacitor Camera failed or cancelled. Using web fallback...', e);
-      
-      // Web fallback using <input type="file"> to allow "Upload"
       return new Promise((resolve) => {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
-        // If source is Camera, we try to hint to use camera
         if (source === CameraSource.Camera) {
           (input as any).capture = 'environment';
         }
@@ -85,19 +80,15 @@ export const CapacitorService = {
   async triggerHaptic() {
     try {
       await Haptics.impact({ style: ImpactStyle.Medium });
-    } catch (e) {
-      // Ignore if not supported
-    }
+    } catch (e) {}
   },
 
   async initStatusBar() {
     try {
       if (StatusBar && typeof StatusBar.setStyle === 'function') {
         await StatusBar.setStyle({ style: Style.Dark });
-        await StatusBar.setBackgroundColor({ color: '#101622' });
+        await StatusBar.setBackgroundColor({ color: '#032e02' });
       }
-    } catch (e) {
-      // Ignore if not on mobile
-    }
+    } catch (e) {}
   }
 };
