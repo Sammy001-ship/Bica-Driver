@@ -96,7 +96,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // Secure Admin Check (Hidden Credentials)
     if (email.toLowerCase() === 'admin@bicadrive.app' && password === 'admin') {
       navigateTo(AppScreen.ADMIN_DASHBOARD);
       return;

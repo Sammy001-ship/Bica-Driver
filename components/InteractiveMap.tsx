@@ -1,5 +1,6 @@
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
+import { IMAGES } from '../constants';
 
 interface InteractiveMapProps {
   center?: [number, number];
@@ -8,136 +9,105 @@ interface InteractiveMapProps {
     id: string;
     position: [number, number];
     title: string;
-    icon?: 'user' | 'taxi' | 'destination' | 'pickup' | 'smart';
+    icon?: 'user' | 'taxi' | 'destination' | 'pickup' | 'smart' | 'nearby';
     draggable?: boolean;
   }>;
   onMarkerDragEnd?: (id: string, newPos: [number, number]) => void;
+  onMapLoad?: (map: any) => void;
   className?: string;
 }
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({ 
   center = [6.5244, 3.3792], 
-  zoom = 15,
   markers = [],
-  onMarkerDragEnd,
   className = ""
 }) => {
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markersLayerRef = useRef<any>(null);
+  // Simple projection simulation for visual demo
+  // We assume the center prop is the center of the screen
+  // And we map offsets to pixels. 1 deg lat ~ 111km. 
+  // Let's say 1000 pixels per degree for a zoomed in view.
+  const SCALE = 8000; 
 
-  useEffect(() => {
-    if (!mapContainerRef.current || mapInstanceRef.current) return;
+  return (
+    <div className={`w-full h-full relative overflow-hidden bg-[#032e02] ${className}`}>
+      {/* Background Map Image - Simulated as a large panning image */}
+      <div 
+        className="absolute inset-[-50%] w-[200%] h-[200%] opacity-40 pointer-events-none"
+        style={{
+           backgroundImage: `url(${IMAGES.MAP_BG})`,
+           backgroundSize: 'cover',
+           backgroundPosition: 'center',
+           // subtle parallax/movement effect
+           transform: `translate(${(center[1] * 50) % 10}px, ${(center[0] * 50) % 10}px)`
+        }}
+      />
+      
+      {/* Grid Overlay for tech feel */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px]"></div>
 
-    const L = (window as any).L;
-    const map = L.map(mapContainerRef.current, {
-      zoomControl: false,
-      attributionControl: false,
-      scrollWheelZoom: true,
-      fadeAnimation: true,
-      markerZoomAnimation: true,
-      zoomSnap: 0.1
-    }).setView(center, zoom);
+      {/* Markers */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        {markers.map((marker) => {
+          // Calculate relative position from center
+          const latDiff = marker.position[0] - center[0];
+          const lngDiff = marker.position[1] - center[1];
+          
+          const y = -latDiff * SCALE; // Latitude goes up, screen Y goes down
+          const x = lngDiff * SCALE;
 
-    // Dark Map Tiles
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
-      maxZoom: 20
-    }).addTo(map);
+          // Only render if reasonably close to be on screen
+          if (Math.abs(x) > 500 || Math.abs(y) > 800) return null;
 
-    mapInstanceRef.current = map;
-    markersLayerRef.current = L.layerGroup().addTo(map);
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.setView(center, zoom, {
-        animate: true,
-        pan: { duration: 1.5 },
-        zoom: { animate: true }
-      });
-    }
-  }, [center, zoom]);
-
-  useEffect(() => {
-    if (!mapInstanceRef.current || !markersLayerRef.current) return;
-    const L = (window as any).L;
-    
-    markersLayerRef.current.clearLayers();
-
-    markers.forEach(marker => {
-      let icon;
-      if (marker.icon === 'user') {
-        icon = L.divIcon({
-          className: 'custom-div-icon',
-          html: `
-            <div class="relative flex items-center justify-center">
-              <div class="absolute w-16 h-16 bg-accent/10 rounded-full animate-ping"></div>
-              <div class="absolute w-10 h-10 bg-accent/20 rounded-full animate-soft-pulse"></div>
-              <div class="z-10 w-4 h-4 bg-accent border-2 border-white rounded-full shadow-[0_0_15px_#f17606]"></div>
-            </div>`,
-          iconSize: [64, 64],
-          iconAnchor: [32, 32]
-        });
-      } else if (marker.icon === 'pickup') {
-        icon = L.divIcon({
-          className: 'custom-div-icon',
-          html: `<div class="relative flex items-center justify-center">
-                  <div class="absolute w-14 h-14 bg-accent/15 rounded-full animate-ping opacity-75"></div>
-                  <div class="z-10 bg-surface-dark p-2.5 rounded-2xl border-2 border-accent flex items-center justify-center shadow-[0_15px_30px_rgba(241,118,6,0.5)]">
-                    <div class="w-3.5 h-3.5 bg-accent rounded-full shadow-[0_0_8px_#f17606]"></div>
+          return (
+             <div 
+               key={marker.id}
+               className="absolute flex flex-col items-center justify-center transition-all duration-500 ease-out"
+               style={{ transform: `translate(${x}px, ${y}px)` }}
+             >
+                {/* Marker Icon */}
+                {marker.icon === 'user' && (
+                  <div className="w-4 h-4 rounded-full bg-accent ring-4 ring-white shadow-lg animate-pulse" />
+                )}
+                {marker.icon === 'taxi' && (
+                  <div className="bg-white p-1.5 rounded-full shadow-lg">
+                    <span className="material-symbols-outlined text-black text-lg">local_taxi</span>
                   </div>
-                </div>`,
-          iconSize: [56, 56],
-          iconAnchor: [28, 28]
-        });
-      } else if (marker.icon === 'taxi') {
-        icon = L.divIcon({
-          className: 'custom-div-icon',
-          html: `<div class="bg-primary text-white p-2.5 rounded-2xl shadow-2xl border-2 border-white/20 animate-bounce">
-                  <span class="material-symbols-outlined text-[18px] block filled">local_taxi</span>
-                </div>`,
-          iconSize: [40, 40],
-          iconAnchor: [20, 20]
-        });
-      } else if (marker.icon === 'destination') {
-        icon = L.divIcon({
-          className: 'custom-div-icon',
-          html: `<div class="bg-white text-primary p-2 rounded-xl shadow-2xl border-2 border-primary flex items-center justify-center">
-                  <span class="material-symbols-outlined text-[24px] block filled">location_on</span>
-                </div>`,
-          iconSize: [40, 40],
-          iconAnchor: [20, 40]
-        });
-      }
+                )}
+                {marker.icon === 'pickup' && (
+                   <div className="relative">
+                     <span className="material-symbols-outlined text-accent text-4xl drop-shadow-lg" style={{ transform: 'translateY(-12px)' }}>location_on</span>
+                     <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-1 bg-black/50 blur-[2px] rounded-full"></div>
+                   </div>
+                )}
+                {marker.icon === 'destination' && (
+                   <div className="relative">
+                     <span className="material-symbols-outlined text-primary text-4xl drop-shadow-lg" style={{ transform: 'translateY(-12px)' }}>flag</span>
+                     <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-1 bg-black/50 blur-[2px] rounded-full"></div>
+                   </div>
+                )}
+                {marker.icon === 'nearby' && (
+                   <div className="w-2 h-2 rounded-full bg-white/50 backdrop-blur-sm shadow-sm" />
+                )}
 
-      const m = L.marker(marker.position, { 
-        icon: icon || L.Icon.Default,
-        draggable: !!marker.draggable
-      })
-      .bindPopup(`<div class="font-display font-black text-[12px] p-1 text-[#032e02] uppercase tracking-widest">${marker.title}</div>`, {
-        closeButton: false,
-        className: 'custom-map-popup'
-      })
-      .addTo(markersLayerRef.current);
-
-      if (marker.draggable && onMarkerDragEnd) {
-        m.on('dragend', (event: any) => {
-          const latlng = event.target.getLatLng();
-          onMarkerDragEnd(marker.id, [latlng.lat, latlng.lng]);
-        });
-      }
-    });
-  }, [markers, onMarkerDragEnd]);
-
-  return <div ref={mapContainerRef} className={`w-full h-full ${className}`} />;
+                {/* Marker Label */}
+                {marker.title && marker.icon !== 'nearby' && (
+                   <div className="absolute top-full mt-1 px-2 py-1 bg-black/60 backdrop-blur-md rounded-md border border-white/10 whitespace-nowrap z-10">
+                      <span className="text-[10px] font-bold text-white">{marker.title}</span>
+                   </div>
+                )}
+             </div>
+          );
+        })}
+      </div>
+      
+      {/* Decorative center reticle */}
+      <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-10">
+        <div className="w-64 h-64 rounded-full border border-white"></div>
+        <div className="w-1 h-4 bg-white absolute"></div>
+        <div className="w-4 h-1 bg-white absolute"></div>
+      </div>
+    </div>
+  );
 };
 
 export default InteractiveMap;

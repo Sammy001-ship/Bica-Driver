@@ -10,9 +10,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
   
-  <!-- Leaflet Map CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   <script>
     tailwind.config = {
@@ -86,37 +83,6 @@
     .color-scheme-dark {
       color-scheme: dark;
     }
-    /* Map Styling */
-    .leaflet-container {
-      background: #032e02 !important;
-    }
-    .leaflet-bar {
-      border: none !important;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
-    }
-    .leaflet-bar a {
-      background-color: #044422 !important;
-      color: white !important;
-      border-bottom: 1px solid #055a29 !important;
-    }
-    .leaflet-control-attribution {
-      background: rgba(3, 46, 2, 0.8) !important;
-      color: #a2b4a8 !important;
-    }
-    .custom-location-dot {
-      width: 14px;
-      height: 14px;
-      background: #f17606;
-      border: 2px solid white;
-      border-radius: 50%;
-      box-shadow: 0 0 15px rgba(241, 118, 6, 0.7);
-      animation: pulse-orange 2s infinite;
-    }
-    @keyframes pulse-orange {
-      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(241, 118, 6, 0.7); }
-      70% { transform: scale(1); box-shadow: 0 0 0 12px rgba(241, 118, 6, 0); }
-      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(241, 118, 6, 0); }
-    }
     
     .stagger-1 { animation-delay: 0.1s; }
     .stagger-2 { animation-delay: 0.2s; }
@@ -124,6 +90,20 @@
     
     .screen-transition {
       animation: fadeIn 0.4s ease-out, slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Google Map Overlay Styling */
+    .gm-style-iw {
+      background-color: #044422 !important;
+      color: white !important;
+      border-radius: 1rem !important;
+      padding: 0 !important;
+    }
+    .gm-style-iw-d {
+      overflow: hidden !important;
+    }
+    .gm-style-iw-tc::after {
+      background-color: #044422 !important;
     }
   </style>
 <script type="importmap">
@@ -143,8 +123,6 @@
   }
 }
 </script>
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 <body class="bg-[#032e02] text-slate-900 dark:text-white font-display antialiased">
   <div id="root"></div>

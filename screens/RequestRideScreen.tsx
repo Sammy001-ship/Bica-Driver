@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { IMAGES } from '../constants';
 import { CapacitorService } from '../services/CapacitorService';
 import { GoogleGenAI } from "@google/genai";
 import InteractiveMap from '../components/InteractiveMap';
@@ -11,7 +10,15 @@ interface SearchResult {
   lon: number;
   id: string;
   description?: string;
-  type?: string;
+}
+
+interface NearbyPlace {
+  id: string;
+  name: string;
+  vicinity: string;
+  location: { lat: number; lng: number };
+  distance: string;
+  type: string;
 }
 
 interface RequestRideScreenProps {
@@ -19,12 +26,63 @@ interface RequestRideScreenProps {
   onBack: () => void;
 }
 
-const DEFAULT_KEYWORDS = [
-  { label: 'Airport', icon: 'flight_takeoff' },
-  { label: 'Business', icon: 'work' },
-  { label: 'Hotels', icon: 'hotel' },
-  { label: 'Clubs', icon: 'nightlife' },
-  { label: 'Parks', icon: 'park' }
+const DISCOVERY_CATEGORIES = [
+  { label: 'Airports', icon: 'flight_takeoff', type: 'airport' },
+  { label: 'Hotels', icon: 'hotel', type: 'lodging' },
+  { label: 'Dining', icon: 'restaurant', type: 'restaurant' },
+  { label: 'Malls', icon: 'shopping_cart', type: 'shopping_mall' }
+];
+
+// Mock Data for Demo - Expanded Lagos Database
+const MOCK_LAGOS_PLACES = [
+  // Airports
+  { id: '1', name: "Murtala Muhammed Intl Airport (MMIA)", vicinity: "Ikeja, Lagos", lat: 6.5774, lng: 3.3210, type: 'airport' },
+  { id: '1b', name: "MMA2 Terminal", vicinity: "Ikeja, Lagos", lat: 6.5770, lng: 3.3200, type: 'airport' },
+  
+  // Island (VI, Lekki, Ikoyi)
+  { id: '2', name: "Eko Hotels & Suites", vicinity: "Victoria Island, Lagos", lat: 6.4253, lng: 3.4308, type: 'lodging' },
+  { id: '3', name: "Lekki Conservation Centre", vicinity: "Lekki-Epe Expy, Lagos", lat: 6.4417, lng: 3.5358, type: 'park' },
+  { id: '5', name: "Landmark Beach", vicinity: "Water Corp Dr, VI", lat: 6.4217, lng: 3.4475, type: 'restaurant' },
+  { id: '6', name: "Civic Center", vicinity: "Ozumba Mbadiwe Ave, VI", lat: 6.4357, lng: 3.4439, type: 'point_of_interest' },
+  { id: '7', name: "Banana Island", vicinity: "Ikoyi, Lagos", lat: 6.4549, lng: 3.4246, type: 'point_of_interest' },
+  { id: '8', name: "Ikoyi Club 1938", vicinity: "Ikoyi, Lagos", lat: 6.4490, lng: 3.4350, type: 'point_of_interest' },
+  { id: '9', name: "The Palms Shopping Mall", vicinity: "Lekki, Lagos", lat: 6.4346, lng: 3.4471, type: 'shopping_mall' },
+  { id: '10', name: "Radisson Blu Anchorage", vicinity: "Victoria Island", lat: 6.4340, lng: 3.4140, type: 'lodging' },
+  { id: '10b', name: "Lekki Phase 1 Gate", vicinity: "Lekki, Lagos", lat: 6.4450, lng: 3.4600, type: 'point_of_interest' },
+  { id: '10c', name: "Admiralty Way", vicinity: "Lekki Phase 1", lat: 6.4480, lng: 3.4700, type: 'point_of_interest' },
+  { id: '10d', name: "Nike Art Gallery", vicinity: "Lekki, Lagos", lat: 6.4380, lng: 3.4800, type: 'point_of_interest' },
+
+  // Mainland (Ikeja, Maryland, Magodo)
+  { id: '4', name: "Ikeja City Mall", vicinity: "Alausa, Ikeja", lat: 6.6142, lng: 3.3581, type: 'shopping_mall' },
+  { id: '11', name: "Maryland Mall", vicinity: "Maryland, Lagos", lat: 6.5720, lng: 3.3670, type: 'shopping_mall' },
+  { id: '12', name: "Kalakuta Republic Museum", vicinity: "Ikeja, Lagos", lat: 6.6050, lng: 3.3500, type: 'point_of_interest' },
+  { id: '13', name: "Magodo Phase 2", vicinity: "Magodo, Lagos", lat: 6.6200, lng: 3.3800, type: 'point_of_interest' },
+  { id: '14', name: "Berger Bus Stop", vicinity: "Berger, Lagos", lat: 6.6400, lng: 3.3700, type: 'point_of_interest' },
+  { id: '15', name: "Computer Village", vicinity: "Ikeja, Lagos", lat: 6.5960, lng: 3.3420, type: 'shopping_mall' },
+  { id: '16', name: "Sheraton Lagos Hotel", vicinity: "Mobolaji Bank Anthony, Ikeja", lat: 6.5820, lng: 3.3620, type: 'lodging' },
+  { id: '16b', name: "Allen Avenue", vicinity: "Ikeja, Lagos", lat: 6.6000, lng: 3.3500, type: 'point_of_interest' },
+
+  // Yaba / Surulere
+  { id: '17', name: "University of Lagos (UNILAG)", vicinity: "Akoka, Yaba", lat: 6.5170, lng: 3.3970, type: 'school' },
+  { id: '18', name: "Yaba College of Technology", vicinity: "Yaba, Lagos", lat: 6.5200, lng: 3.3700, type: 'school' },
+  { id: '19', name: "Tejuosho Market", vicinity: "Yaba, Lagos", lat: 6.5050, lng: 3.3650, type: 'shopping_mall' },
+  { id: '20', name: "National Stadium", vicinity: "Surulere, Lagos", lat: 6.4970, lng: 3.3600, type: 'point_of_interest' },
+  { id: '21', name: "Leisure Mall", vicinity: "Adeniran Ogunsanya, Surulere", lat: 6.4950, lng: 3.3550, type: 'shopping_mall' },
+  { id: '22', name: "Teslim Balogun Stadium", vicinity: "Surulere, Lagos", lat: 6.4980, lng: 3.3620, type: 'point_of_interest' },
+  { id: '22b', name: "Bode Thomas Street", vicinity: "Surulere, Lagos", lat: 6.4900, lng: 3.3500, type: 'point_of_interest' },
+
+  // Greater Lagos
+  { id: '23', name: "Oshodi Transport Interchange", vicinity: "Oshodi, Lagos", lat: 6.5550, lng: 3.3450, type: 'point_of_interest' },
+  { id: '24', name: "Gbagada General Hospital", vicinity: "Gbagada, Lagos", lat: 6.5500, lng: 3.3900, type: 'hospital' },
+  { id: '25', name: "Third Mainland Bridge", vicinity: "Lagos Lagoon", lat: 6.5300, lng: 3.4000, type: 'point_of_interest' },
+  { id: '26', name: "Apapa Port", vicinity: "Apapa, Lagos", lat: 6.4400, lng: 3.3600, type: 'point_of_interest' },
+  { id: '27', name: "Festac Town (First Gate)", vicinity: "Festac, Lagos", lat: 6.4700, lng: 3.2900, type: 'point_of_interest' },
+  { id: '28', name: "Trade Fair Complex", vicinity: "Ojo, Lagos", lat: 6.4600, lng: 3.2500, type: 'shopping_mall' },
+  { id: '29', name: "Synagogue Church (SCOAN)", vicinity: "Ikotun, Lagos", lat: 6.5400, lng: 3.2700, type: 'point_of_interest' },
+  { id: '30', name: "Whispering Palms", vicinity: "Badagry, Lagos", lat: 6.4000, lng: 2.9000, type: 'lodging' },
+  { id: '31', name: "Lufasi Nature Park", vicinity: "Lekki-Epe Expy", lat: 6.4700, lng: 3.6500, type: 'park' },
+  { id: '32', name: "Novare Lekki Mall", vicinity: "Sangotedo, Lagos", lat: 6.4800, lng: 3.6200, type: 'shopping_mall' },
+  { id: '33', name: "Jubilee Bridge", vicinity: "Ajah, Lagos", lat: 6.4650, lng: 3.5600, type: 'point_of_interest' }
 ];
 
 const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, onBack }) => {
@@ -40,87 +98,19 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
   const [destCoords, setDestCoords] = useState<[number, number] | null>(null);
   const [destResults, setDestResults] = useState<SearchResult[]>([]);
   
+  const [nearbyResults, setNearbyResults] = useState<NearbyPlace[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  
   const [activeSearchField, setActiveSearchField] = useState<'pickup' | 'destination' | null>(null);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number]>([6.5244, 3.3792]);
   const [userRealTimePos, setUserRealTimePos] = useState<[number, number] | null>(null);
-  const [locationAccuracy, setLocationAccuracy] = useState<number>(0);
-  const [areaKeywords, setAreaKeywords] = useState(DEFAULT_KEYWORDS);
-
-  // Improved Scheduling State
+  
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
 
-  const searchTimeout = useRef<any>(null);
   const watchIdRef = useRef<number | null>(null);
-
-  const aiResolveLocation = async (query: string, field: 'pickup' | 'destination') => {
-    if (!query || query.length < 2 || !process.env.API_KEY) return;
-    
-    setIsAiLoading(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Locate this place in Nigeria: "${query}". Return the top 3 best matching specific locations. Format: Name|Lat|Lon|ShortDescription`,
-        config: { tools: [{ googleSearch: {} }] },
-      });
-
-      const text = response.text || "";
-      const lines = text.split('\n').filter(l => l.includes('|'));
-      const results: SearchResult[] = lines.map((line, i) => {
-        const [name, lat, lon, desc] = line.split('|');
-        return {
-          display_name: name.trim(),
-          lat: parseFloat(lat),
-          lon: parseFloat(lon),
-          description: desc?.trim(),
-          id: `ai-${i}-${Date.now()}`
-        };
-      }).filter(r => !isNaN(r.lat));
-
-      if (field === 'pickup') setPickupResults(results);
-      else setDestResults(results);
-
-      setAiInsight(results.length > 0 ? `I've mapped out direct locations for "${query}".` : "Finding best direct route...");
-    } catch (error) {
-      console.error("AI resolution failed", error);
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  const fetchAreaKeywords = async (lat: number, lon: number) => {
-    if (!process.env.API_KEY) return;
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Give me 5 trending destination categories near coordinates ${lat}, ${lon} in Nigeria. Return as a short comma-separated list.`,
-        config: { tools: [{ googleSearch: {} }] }
-      });
-      const keywords = response.text?.split(',').map(k => k.trim()) || [];
-      if (keywords.length > 0) {
-        setAreaKeywords(keywords.map(k => ({ label: k, icon: 'explore' })));
-      }
-    } catch (e) {}
-  };
-
-  const smartReverseGeocode = async (lat: number, lon: number): Promise<string> => {
-    if (!process.env.API_KEY) return "Direct Location";
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `What is the specific place name or building at ${lat}, ${lon}? Return ONLY the name.`,
-        config: { tools: [{ googleSearch: {} }] }
-      });
-      return response.text?.trim() || "My Current Location";
-    } catch (error) {
-      return "Direct Location";
-    }
-  };
 
   useEffect(() => {
     const initLocation = async () => {
@@ -130,30 +120,53 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
         setUserRealTimePos(coords);
         setPickupCoords(coords);
         setMapCenter(coords);
-        setLocationAccuracy(pos.coords.accuracy || 0);
-        const name = await smartReverseGeocode(coords[0], coords[1]);
-        setPickupLocation(name);
-        fetchAreaKeywords(coords[0], coords[1]);
+        setPickupLocation("Current Location (Lagos)");
+        fetchNearbyResults(coords[0], coords[1]);
+      } else {
+        // Fallback for demo if geolocation fails
+        const fallback: [number, number] = [6.4253, 3.4308]; // Eko Hotel
+        setUserRealTimePos(fallback);
+        setPickupCoords(fallback);
+        setMapCenter(fallback);
+        setPickupLocation("Victoria Island, Lagos");
+        fetchNearbyResults(fallback[0], fallback[1]);
       }
 
       if ("geolocation" in navigator) {
         watchIdRef.current = navigator.geolocation.watchPosition((p) => {
           const c: [number, number] = [p.coords.latitude, p.coords.longitude];
           setUserRealTimePos(c);
-          setLocationAccuracy(p.coords.accuracy || 0);
           if (isTrackingLive) {
             setPickupCoords(c);
             setMapCenter(c);
           }
-        }, null, { enableHighAccuracy: true });
+        }, (error) => {
+          console.warn("Watch position error:", error);
+        }, { enableHighAccuracy: true });
       }
     };
 
     initLocation();
+
     return () => {
       if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
     };
   }, []);
+
+  const fetchNearbyResults = (lat: number, lng: number, type: string = 'point_of_interest') => {
+    // Simulated nearby search
+    const filtered = MOCK_LAGOS_PLACES.filter(p => type === 'point_of_interest' || p.type === type || (type === 'restaurant' && p.type === 'lodging')).slice(0, 5);
+    
+    const results: NearbyPlace[] = filtered.map(p => ({
+      id: p.id,
+      name: p.name,
+      vicinity: p.vicinity,
+      location: { lat: p.lat, lng: p.lng },
+      distance: (Math.random() * 5 + 1).toFixed(1) + ' km',
+      type: p.type
+    }));
+    setNearbyResults(results);
+  };
 
   const handleInputChange = (val: string, field: 'pickup' | 'destination') => {
     if (field === 'pickup') {
@@ -164,18 +177,27 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     }
     setActiveSearchField(field);
 
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    searchTimeout.current = setTimeout(() => aiResolveLocation(val, field), 1500);
-  };
-
-  const handleManualSearch = (field: 'pickup' | 'destination') => {
-    CapacitorService.triggerHaptic();
-    const query = field === 'pickup' ? pickupLocation : destination;
-    aiResolveLocation(query, field);
+    if (val.length > 1) {
+       // Mock suggestions
+       const suggestions = MOCK_LAGOS_PLACES.filter(p => p.name.toLowerCase().includes(val.toLowerCase()) || p.vicinity.toLowerCase().includes(val.toLowerCase()));
+       const results: SearchResult[] = suggestions.map(p => ({
+         display_name: p.name,
+         description: p.vicinity,
+         id: p.id,
+         lat: p.lat,
+         lon: p.lng
+       }));
+       if (field === 'pickup') setPickupResults(results);
+       else setDestResults(results);
+    } else {
+       if (field === 'pickup') setPickupResults([]);
+       else setDestResults([]);
+    }
   };
 
   const selectResult = (res: SearchResult, field: 'pickup' | 'destination') => {
     const coords: [number, number] = [res.lat, res.lon];
+    
     if (field === 'pickup') {
       setPickupLocation(res.display_name);
       setPickupCoords(coords);
@@ -186,18 +208,67 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     setMapCenter(coords);
     setActiveSearchField(null);
     CapacitorService.triggerHaptic();
+    
+    fetchNearbyResults(coords[0], coords[1]);
+    generateAiInsight(res.display_name);
   };
 
-  const handleMarkerDragEnd = async (id: string, newPos: [number, number]) => {
+  const triggerManualSearch = (field: 'pickup' | 'destination') => {
+    // Simulates searching by just accepting the input if it matches any mock data or defaulting to a location
+    const val = field === 'pickup' ? pickupLocation : destination;
+    setIsAiLoading(true);
+    
+    setTimeout(() => {
+      setIsAiLoading(false);
+      const matched = MOCK_LAGOS_PLACES.find(p => p.name.toLowerCase().includes(val.toLowerCase()));
+      if (matched) {
+        selectResult({
+          display_name: matched.name,
+          description: matched.vicinity,
+          id: matched.id,
+          lat: matched.lat,
+          lon: matched.lng
+        }, field);
+      } else {
+        // Fallback random mock location if not found, for demo purposes
+        const random = MOCK_LAGOS_PLACES[Math.floor(Math.random() * MOCK_LAGOS_PLACES.length)];
+        selectResult({
+          display_name: random.name,
+          description: random.vicinity,
+          id: random.id,
+          lat: random.lat,
+          lon: random.lng
+        }, field);
+        alert(`Exact location "${val}" not found in demo database. Snapped to ${random.name}.`);
+      }
+    }, 1000);
+  };
+
+  const generateAiInsight = async (locationName: string) => {
+    if (!process.env.API_KEY) return;
+    setIsAiLoading(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Provide a short, 1-sentence elite travel tip or safety status for a premium chauffeur service heading to: ${locationName} in Nigeria. Keep it professional and luxury-focused.`,
+      });
+      setAiInsight(response.text || "Direct route optimized for safety.");
+    } catch (e) {
+      setAiInsight("Premium route calculated.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const handleMarkerDragEnd = (id: string, newPos: [number, number]) => {
+    // Simulating drag
     CapacitorService.triggerHaptic();
-    const name = await smartReverseGeocode(newPos[0], newPos[1]);
     if (id === 'pickup') {
       setPickupCoords(newPos);
-      setPickupLocation(name);
-      setIsTrackingLive(false);
+      // Don't reverse geocode in this mock version
     } else {
       setDestCoords(newPos);
-      setDestination(name);
     }
   };
 
@@ -207,73 +278,71 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     if (userRealTimePos) {
       setMapCenter(userRealTimePos);
       setPickupCoords(userRealTimePos);
-      const name = await smartReverseGeocode(userRealTimePos[0], userRealTimePos[1]);
-      setPickupLocation(name);
+      setPickupLocation("Current Location");
+      fetchNearbyResults(userRealTimePos[0], userRealTimePos[1]);
     }
   };
 
-  const handleKeywordTap = (label: string) => {
+  const handleCategorySelect = (categoryType: string) => {
     CapacitorService.triggerHaptic();
-    setDestination(label);
-    setActiveSearchField('destination');
-    aiResolveLocation(label, 'destination');
+    setActiveCategory(categoryType);
+    const origin = pickupCoords || userRealTimePos;
+    if (origin) {
+      fetchNearbyResults(origin[0], origin[1], categoryType);
+    }
+  };
+
+  const selectNearbyPlace = (place: NearbyPlace) => {
+    setDestination(place.name);
+    setDestCoords([place.location.lat, place.location.lng]);
+    setMapCenter([place.location.lat, place.location.lng]);
+    CapacitorService.triggerHaptic();
   };
 
   const isFormValid = () => {
-    if (rideType === 'now') {
-      return !!destination;
-    } else {
-      return !!destination && !!scheduledDate && !!scheduledTime;
-    }
-  };
-
-  const setQuickDate = (type: 'today' | 'tomorrow') => {
-    CapacitorService.triggerHaptic();
-    const date = new Date();
-    if (type === 'tomorrow') date.setDate(date.getDate() + 1);
-    setScheduledDate(date.toISOString().split('T')[0]);
+    if (rideType === 'now') return !!destCoords;
+    return !!destCoords && !!scheduledDate && !!scheduledTime;
   };
 
   const getFriendlyScheduleText = () => {
     if (!scheduledDate || !scheduledTime) return "Select preferred arrival window";
     const dateObj = new Date(`${scheduledDate}T${scheduledTime}`);
-    const now = new Date();
-    const isToday = now.toDateString() === dateObj.toDateString();
-    
-    const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    const timeStr = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    
-    return `Driver will arrive ${isToday ? 'Today' : dayName} at ${timeStr}`;
+    return `Driver will arrive ${dateObj.toLocaleDateString()} at ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
   const mapMarkers: any[] = [];
   if (userRealTimePos) mapMarkers.push({ id: 'live', position: userRealTimePos, title: 'Live Pulse', icon: 'user' });
   if (pickupCoords) mapMarkers.push({ id: 'pickup', position: pickupCoords, title: 'Direct Pickup', icon: 'pickup', draggable: true });
   if (destCoords) mapMarkers.push({ id: 'destination', position: destCoords, title: 'Direct Drop-off', icon: 'destination', draggable: true });
+  
+  nearbyResults.forEach(p => {
+    mapMarkers.push({ 
+      id: p.id, 
+      position: [p.location.lat, p.location.lng], 
+      title: p.name, 
+      icon: 'nearby' 
+    });
+  });
 
   return (
     <div className="h-screen w-full overflow-hidden flex flex-col relative bg-background-dark">
       <div className="absolute inset-0 z-0">
         <InteractiveMap 
           center={mapCenter} 
-          zoom={pickupCoords ? 17 : 14}
           markers={mapMarkers} 
           onMarkerDragEnd={handleMarkerDragEnd}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-background-dark/40 via-transparent to-background-dark/95 pointer-events-none"></div>
       </div>
 
-      {/* Floating Header */}
       <div className="relative z-30 flex items-center justify-between p-4 pt-10">
         <button onClick={onBack} className="bg-surface-dark/95 backdrop-blur-3xl text-white size-12 flex items-center justify-center rounded-2xl shadow-2xl border border-white/10 active:scale-90 transition-all">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
-        
         <div className="bg-accent/10 backdrop-blur-xl border border-accent/30 px-4 py-2 rounded-full flex items-center gap-2 animate-fade-in shadow-xl">
           <div className="w-2 h-2 rounded-full bg-accent animate-pulse"></div>
-          <span className="text-[10px] font-black text-accent uppercase tracking-widest">Precision Tracking</span>
+          <span className="text-[10px] font-black text-accent uppercase tracking-widest">Global Location Intel</span>
         </div>
-
         <button onClick={onOpenProfile} className="bg-surface-dark/95 backdrop-blur-3xl text-white size-12 flex items-center justify-center rounded-2xl shadow-2xl border border-white/10 active:scale-90 transition-all">
           <span className="material-symbols-outlined">person</span>
         </button>
@@ -281,189 +350,153 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
 
       <div className="flex-1"></div>
 
-      {/* Map Control */}
       <div className="relative z-30 p-4 flex justify-end">
         <button 
           onClick={handleLocateMe}
-          className={`relative bg-white text-primary p-4 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.6)] active:scale-90 transition-all ${isTrackingLive ? 'ring-4 ring-primary/40' : ''}`}
+          className={`relative bg-white text-primary p-4 rounded-full shadow-2xl active:scale-90 transition-all ${isTrackingLive ? 'ring-4 ring-primary/40' : ''}`}
         >
           <span className={`material-symbols-outlined text-2xl ${isTrackingLive ? 'filled' : ''}`}>my_location</span>
-          {isTrackingLive && <div className="absolute inset-0 rounded-full border-4 border-accent/20 animate-ping"></div>}
         </button>
       </div>
 
-      {/* Main Bottom Sheet Interface */}
       <div className="relative z-20 w-full bg-surface-dark rounded-t-[3.5rem] shadow-[0_-30px_80px_rgba(0,0,0,0.9)] border-t border-white/5 flex flex-col max-h-[85vh]">
         <div className="w-full flex justify-center py-5"><div className="h-1.5 w-16 rounded-full bg-slate-700/40"></div></div>
         
         <div className="px-7 pb-12 flex flex-col gap-6 overflow-y-auto no-scrollbar">
-          
           <div className="flex p-1.5 bg-input-dark rounded-[2.5rem] border border-white/5 shadow-inner">
             <button onClick={() => setRideType('now')} className={`flex-1 py-4 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.15em] transition-all ${rideType === 'now' ? 'bg-primary text-white shadow-2xl scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}>Ride Now</button>
             <button onClick={() => setRideType('schedule')} className={`flex-1 py-4 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.15em] transition-all ${rideType === 'schedule' ? 'bg-primary text-white shadow-2xl scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}>Schedule</button>
           </div>
 
-          {/* Premium Scheduling System */}
           {rideType === 'schedule' && (
-            <div className="flex flex-col gap-4 animate-slide-up stagger-1">
-              <div className="flex items-center justify-between ml-1">
-                <span className="text-[10px] font-black text-accent uppercase tracking-[0.25em]">Departure Window</span>
-                <div className="flex gap-2">
-                  <button onClick={() => setQuickDate('today')} className="text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent hover:bg-accent/20 transition-all active:scale-90">Today</button>
-                  <button onClick={() => setQuickDate('tomorrow')} className="text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-white transition-all active:scale-90">Tomorrow</button>
-                </div>
-              </div>
-              
+            <div className="flex flex-col gap-4 animate-slide-up">
               <div className="grid grid-cols-2 gap-4">
-                <div className="relative group">
-                   <div className="absolute left-5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors group-focus-within:text-accent">
-                     <span className="material-symbols-outlined text-xl text-slate-500">event</span>
-                   </div>
-                   <input 
-                    type="date"
-                    className="w-full bg-input-dark rounded-3xl pl-14 pr-5 h-16 border border-white/5 text-white text-sm font-bold focus:ring-2 focus:ring-accent focus:border-transparent transition-all color-scheme-dark shadow-xl"
-                    value={scheduledDate}
-                    onChange={(e) => { CapacitorService.triggerHaptic(); setScheduledDate(e.target.value); }}
-                   />
-                </div>
-                <div className="relative group">
-                   <div className="absolute left-5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors group-focus-within:text-accent">
-                     <span className="material-symbols-outlined text-xl text-slate-500">schedule</span>
-                   </div>
-                   <input 
-                    type="time"
-                    className="w-full bg-input-dark rounded-3xl pl-14 pr-5 h-16 border border-white/5 text-white text-sm font-bold focus:ring-2 focus:ring-accent focus:border-transparent transition-all color-scheme-dark shadow-xl"
-                    value={scheduledTime}
-                    onChange={(e) => { CapacitorService.triggerHaptic(); setScheduledTime(e.target.value); }}
-                   />
-                </div>
+                <input type="date" className="bg-input-dark rounded-3xl h-16 border-white/5 text-white font-bold color-scheme-dark px-4" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} />
+                <input type="time" className="bg-input-dark rounded-3xl h-16 border-white/5 text-white font-bold color-scheme-dark px-4" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} />
               </div>
-
-              <div className="bg-accent/5 border border-accent/10 rounded-2xl p-4 flex items-center gap-3 animate-fade-in">
-                 <span className="material-symbols-outlined text-accent text-lg filled">verified</span>
-                 <p className="text-[11px] font-bold text-slate-300 italic">{getFriendlyScheduleText()}</p>
-              </div>
+              <p className="text-[11px] font-bold text-accent italic text-center">{getFriendlyScheduleText()}</p>
             </div>
           )}
 
-          <div className="flex gap-5">
-            <div className="flex flex-col items-center pt-8 pb-4">
-              <div className="w-4 h-4 rounded-full border-2 border-accent shadow-[0_0_12px_rgba(241,118,6,0.5)]"></div>
-              <div className="w-0.5 flex-1 bg-gradient-to-b from-accent via-accent/40 to-slate-800 my-2 rounded-full opacity-50"></div>
-              <div className="w-4 h-4 rounded-lg bg-primary shadow-[0_0_12px_rgba(4,88,40,0.5)]"></div>
+          <div className="flex flex-col gap-6">
+            <div className="relative">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Pickup</label>
+              <div className="flex items-center bg-input-dark rounded-[1.75rem] border border-white/5 shadow-xl transition-all focus-within:ring-2 focus-within:ring-primary/40 pr-2">
+                <input 
+                  className="w-full bg-transparent px-5 h-16 border-none text-white font-bold focus:ring-0 placeholder-slate-700"
+                  placeholder="Where from?"
+                  value={pickupLocation}
+                  onChange={e => handleInputChange(e.target.value, 'pickup')}
+                  onFocus={() => setActiveSearchField('pickup')}
+                />
+                <button 
+                  onClick={() => triggerManualSearch('pickup')}
+                  className="size-12 flex items-center justify-center rounded-2xl bg-accent text-white hover:bg-accent/80 active:scale-90 transition-all shrink-0 shadow-lg shadow-accent/20"
+                  title="Search manual location"
+                >
+                  <span className="material-symbols-outlined text-[20px]">search</span>
+                </button>
+              </div>
+              {activeSearchField === 'pickup' && pickupResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-surface-dark rounded-3xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto no-scrollbar">
+                  {pickupResults.map(res => (
+                    <button key={res.id} onClick={() => selectResult(res, 'pickup')} className="w-full p-4 text-left border-b border-white/5 hover:bg-primary/20 flex flex-col group transition-all">
+                      <span className="text-white font-bold text-sm group-hover:text-accent">{res.display_name}</span>
+                      <span className="text-slate-500 text-[10px] truncate">{res.description}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <div className="flex flex-col gap-8 flex-1">
-              {/* Pickup Input */}
-              <div className="relative">
-                <div className="flex items-center justify-between mb-2 ml-1">
-                  <label className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Direct Pickup</label>
-                  {isTrackingLive && <span className="text-[9px] font-black text-accent uppercase bg-accent/10 px-2 py-0.5 rounded animate-pulse">Live Radar</span>}
-                </div>
-                <div className={`flex items-center bg-input-dark rounded-[1.75rem] px-5 h-16 border transition-all shadow-xl ${activeSearchField === 'pickup' ? 'border-primary shadow-primary/10 ring-2 ring-primary/20' : 'border-white/5'}`}>
-                  <input 
-                    className="bg-transparent border-none text-white text-[16px] font-bold w-full focus:ring-0 p-0 placeholder-slate-700" 
-                    placeholder="Where are you?"
-                    value={pickupLocation}
-                    onChange={(e) => handleInputChange(e.target.value, 'pickup')}
-                    onFocus={() => setActiveSearchField('pickup')}
-                  />
-                  <button onClick={() => handleManualSearch('pickup')} className="p-2 text-slate-400 hover:text-accent transition-colors active:scale-90">
-                    <span className="material-symbols-outlined text-2xl">search</span>
-                  </button>
-                  {isAiLoading && activeSearchField === 'pickup' && <span className="material-symbols-outlined animate-spin text-accent ml-1">progress_activity</span>}
-                </div>
-                {activeSearchField === 'pickup' && pickupResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-4 bg-surface-dark rounded-3xl border border-white/10 shadow-[0_30px_80px_rgba(0,0,0,0.8)] z-[60] overflow-hidden animate-scale-in max-h-64 overflow-y-auto no-scrollbar">
-                    {pickupResults.map(res => (
-                      <button key={res.id} onClick={() => selectResult(res, 'pickup')} className="w-full p-5 text-left border-b border-white/5 hover:bg-primary/10 flex flex-col gap-1 group transition-all">
-                        <div className="flex items-center gap-3">
-                          <span className="material-symbols-outlined text-slate-500 group-hover:text-accent transition-colors">location_on</span>
-                          <span className="text-white text-[15px] font-bold truncate">{res.display_name}</span>
-                        </div>
-                        {res.description && <span className="text-[10px] text-slate-400 font-medium ml-8 leading-tight">{res.description}</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
+            <div className="relative">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Destination</label>
+              <div className="flex items-center bg-input-dark rounded-[1.75rem] border border-white/5 shadow-xl transition-all focus-within:ring-2 focus-within:ring-primary/40 pr-2">
+                <input 
+                  className="w-full bg-transparent px-5 h-16 border-none text-white font-bold focus:ring-0 placeholder-slate-700"
+                  placeholder="Where to?"
+                  value={destination}
+                  onChange={e => handleInputChange(e.target.value, 'destination')}
+                  onFocus={() => setActiveSearchField('destination')}
+                />
+                <button 
+                  onClick={() => triggerManualSearch('destination')}
+                  className="size-12 flex items-center justify-center rounded-2xl bg-accent text-white hover:bg-accent/80 active:scale-90 transition-all shrink-0 shadow-lg shadow-accent/20"
+                  title="Search manual location"
+                >
+                  <span className="material-symbols-outlined text-[20px]">search</span>
+                </button>
               </div>
-
-              {/* Destination Input */}
-              <div className="relative">
-                <label className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2 block ml-1">Destination Address</label>
-                <div className={`flex items-center bg-input-dark rounded-[1.75rem] px-5 h-16 border transition-all shadow-xl ${activeSearchField === 'destination' ? 'border-primary shadow-primary/10 ring-2 ring-primary/20' : 'border-white/5'}`}>
-                  <input 
-                    className="bg-transparent border-none text-white text-[16px] font-bold w-full focus:ring-0 p-0 placeholder-slate-700" 
-                    placeholder="Where to?"
-                    value={destination}
-                    onChange={(e) => handleInputChange(e.target.value, 'destination')}
-                    onFocus={() => setActiveSearchField('destination')}
-                  />
-                  <button onClick={() => handleManualSearch('destination')} className="p-2 text-slate-400 hover:text-accent transition-colors active:scale-90">
-                    <span className="material-symbols-outlined text-2xl">search</span>
-                  </button>
-                  {isAiLoading && activeSearchField === 'destination' && <span className="material-symbols-outlined animate-spin text-accent ml-1">progress_activity</span>}
+              {activeSearchField === 'destination' && destResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-surface-dark rounded-3xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto no-scrollbar">
+                  {destResults.map(res => (
+                    <button key={res.id} onClick={() => selectResult(res, 'destination')} className="w-full p-4 text-left border-b border-white/5 hover:bg-primary/20 flex flex-col group transition-all">
+                      <span className="text-white font-bold text-sm group-hover:text-accent">{res.display_name}</span>
+                      <span className="text-slate-500 text-[10px] truncate">{res.description}</span>
+                    </button>
+                  ))}
                 </div>
-                {activeSearchField === 'destination' && destResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-4 bg-surface-dark rounded-3xl border border-white/10 shadow-[0_30px_80px_rgba(0,0,0,0.8)] z-[60] overflow-hidden animate-scale-in max-h-64 overflow-y-auto no-scrollbar">
-                    {destResults.map(res => (
-                      <button key={res.id} onClick={() => selectResult(res, 'destination')} className="w-full p-5 text-left border-b border-white/5 hover:bg-primary/10 flex flex-col gap-1 group transition-all">
-                        <div className="flex items-center gap-3">
-                          <span className="material-symbols-outlined text-slate-500 group-hover:text-accent transition-colors">map</span>
-                          <span className="text-white text-[15px] font-bold truncate">{res.display_name}</span>
-                        </div>
-                        {res.description && <span className="text-[10px] text-slate-400 font-medium ml-8 leading-tight">{res.description}</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Related Discovery Chips */}
-          {!activeSearchField && (
-            <div className="flex flex-col gap-2 mt-2 animate-fade-in">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] ml-1">Popular Nearby</span>
-              <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2 px-1">
-                {areaKeywords.map((kw, i) => (
+          <div className="flex flex-col gap-4">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Live Discovery</span>
+            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+              {DISCOVERY_CATEGORIES.map((cat, i) => (
+                <button 
+                  key={i} 
+                  onClick={() => handleCategorySelect(cat.type)} 
+                  className={`flex items-center gap-2 px-5 py-3 rounded-2xl transition-all shrink-0 border ${
+                    activeCategory === cat.type ? 'bg-accent/20 border-accent/50 text-accent' : 'bg-input-dark/60 border-white/5 text-slate-300'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-sm">{cat.icon}</span>
+                  <span className="text-[11px] font-black uppercase">{cat.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {nearbyResults.length > 0 && (
+              <div className="flex flex-col gap-3 mt-1 animate-fade-in">
+                {nearbyResults.map(place => (
                   <button 
-                    key={i}
-                    onClick={() => handleKeywordTap(kw.label)}
-                    className="flex items-center gap-2.5 px-5 py-3.5 rounded-2xl bg-input-dark/60 border border-white/5 hover:border-accent/50 hover:bg-accent/10 transition-all shrink-0 active:scale-95 group shadow-lg"
+                    key={place.id} 
+                    onClick={() => selectNearbyPlace(place)}
+                    className="flex items-center gap-4 bg-input-dark/30 p-4 rounded-2xl border border-white/5 hover:bg-primary/10 transition-all text-left group"
                   >
-                    <span className="material-symbols-outlined text-sm text-slate-500 group-hover:text-accent transition-colors">{kw.icon}</span>
-                    <span className="text-[11px] font-black text-slate-300 group-hover:text-white uppercase tracking-wider">{kw.label}</span>
+                    <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center text-accent group-hover:bg-accent group-hover:text-white transition-all">
+                      <span className="material-symbols-outlined">explore</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-white truncate">{place.name}</p>
+                      <p className="text-[10px] text-slate-500 truncate">{place.vicinity}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[11px] font-black text-accent">{place.distance}</p>
+                    </div>
                   </button>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          {aiInsight && !isAiLoading && !activeSearchField && (
-            <div className="bg-primary/10 border border-primary/30 rounded-[2rem] p-6 flex gap-5 animate-slide-up shadow-xl">
-              <div className="bg-primary/20 p-3.5 rounded-2xl shrink-0 h-fit">
+          {aiInsight && !isAiLoading && (
+            <div className="bg-primary/10 border border-primary/30 rounded-3xl p-5 flex gap-4 shadow-xl">
+              <div className="shrink-0 p-2 bg-primary/20 rounded-xl h-fit">
                 <span className="material-symbols-outlined text-accent text-2xl filled">auto_awesome</span>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-black text-accent uppercase tracking-[0.3em]">Direct AI Intelligence</span>
-                <p className="text-[13px] text-slate-300 leading-relaxed font-bold italic opacity-90">{aiInsight}</p>
-              </div>
+              <p className="text-[12px] text-slate-300 font-bold italic leading-relaxed">{aiInsight}</p>
             </div>
           )}
 
-          {/* Pricing & Final Booking Action */}
-          <div className="mt-6 space-y-10">
+          <div className="mt-6 flex flex-col gap-8">
             <div className="flex items-center justify-between px-3">
               <div className="flex flex-col">
-                <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.25em] mb-2">Service Estimate</span>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-[34px] font-black text-white tracking-tighter">₦15,000</span>
-                  <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Fixed</span>
-                </div>
+                <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">Elite Estimate</span>
+                <span className="text-[34px] font-black text-white tracking-tighter">₦15,000</span>
               </div>
-              <div className="flex items-center gap-4 bg-input-dark/80 px-6 py-4 rounded-3xl border border-white/10 shadow-lg">
-                <span className="material-symbols-outlined text-slate-400 text-xl">credit_card</span>
+              <div className="bg-input-dark/80 px-6 py-4 rounded-3xl border border-white/10 shadow-lg">
                 <span className="text-[11px] font-black text-slate-300 uppercase tracking-widest">VISA • 4288</span>
               </div>
             </div>
@@ -472,16 +505,11 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
               onClick={() => {
                 CapacitorService.triggerHaptic();
                 setIsSearching(true);
-                setTimeout(() => { 
-                  setIsSearching(false); 
-                  alert(rideType === 'now' ? "Requesting Professional Chauffeur..." : `Professional Chauffeur Scheduled for ${scheduledDate} at ${scheduledTime}`); 
-                }, 1500);
+                setTimeout(() => { setIsSearching(false); alert("Professional Chauffeur request submitted via Bicadriver Intel."); }, 1500);
               }}
               disabled={!isFormValid() || isSearching}
-              className={`w-full h-20 rounded-[2.25rem] font-black text-[17px] uppercase tracking-[0.15em] flex items-center justify-center gap-4 shadow-[0_25px_60px_rgba(0,0,0,0.5)] transition-all active:scale-[0.97] ${
-                isSearching ? 'bg-slate-700' : 
-                isFormValid() ? 'bg-primary text-white hover:brightness-110 shadow-primary/30' : 
-                'bg-slate-800 text-slate-600 cursor-not-allowed opacity-50'
+              className={`w-full h-20 rounded-[2.25rem] font-black text-[17px] uppercase tracking-widest flex items-center justify-center gap-4 transition-all active:scale-[0.97] shadow-2xl ${
+                isFormValid() ? 'bg-primary text-white hover:brightness-110 shadow-primary/40' : 'bg-slate-800 text-slate-600 opacity-50'
               }`}
             >
               {isSearching ? <span className="material-symbols-outlined animate-spin">progress_activity</span> : (
