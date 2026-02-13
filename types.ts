@@ -24,6 +24,15 @@ export interface UserProfile {
   selfieImage?: string;
   backgroundCheckAccepted?: boolean;
   approvalStatus?: ApprovalStatus;
+  
+  // New Registration Fields
+  gender?: string;
+  address?: string;
+  nationality?: string;
+  age?: string;
+  nin?: string;
+  ninImage?: string;
+  transmission?: 'Manual' | 'Automatic' | 'Both';
 }
 
 export enum AppScreen {

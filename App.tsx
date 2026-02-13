@@ -23,7 +23,10 @@ const MOCK_USERS: UserProfile[] = [
     trips: 240,
     avatar: IMAGES.USER_AVATAR,
     carType: "Mercedes S-Class",
-    walletBalance: 0
+    walletBalance: 0,
+    gender: "Male",
+    nationality: "American",
+    age: "34"
   },
   {
     id: '2',
@@ -36,7 +39,10 @@ const MOCK_USERS: UserProfile[] = [
     avatar: IMAGES.DRIVER_CARD,
     approvalStatus: 'APPROVED',
     backgroundCheckAccepted: true,
-    walletBalance: 45250
+    walletBalance: 45250,
+    transmission: 'Both',
+    age: "28",
+    nin: "12345678901"
   }
 ];
 
@@ -77,7 +83,15 @@ const App: React.FC = () => {
       selfieImage: userData.selfieImage,
       backgroundCheckAccepted: userData.backgroundCheckAccepted,
       approvalStatus: selectedSignupRole === UserRole.DRIVER ? 'PENDING' : 'APPROVED',
-      walletBalance: 0
+      walletBalance: 0,
+      // New Fields
+      gender: userData.gender,
+      address: userData.address,
+      nationality: userData.nationality,
+      age: userData.age,
+      nin: userData.nin,
+      ninImage: userData.ninImage,
+      transmission: userData.transmission
     };
 
     setAllUsers([...allUsers, newUser]);

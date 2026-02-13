@@ -20,19 +20,30 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ role, onSignUp, onBack, onG
     carType: '',
     licenseImage: '',
     selfieImage: '',
-    backgroundCheckAccepted: false
+    backgroundCheckAccepted: false,
+    // New Fields
+    gender: '',
+    address: '',
+    nationality: '',
+    age: '',
+    nin: '',
+    ninImage: '',
+    transmission: 'Automatic' as 'Manual' | 'Automatic' | 'Both'
   });
+  
   const [showPassword, setShowPassword] = useState(false);
-  const [isCapturing, setIsCapturing] = useState<'license' | 'selfie' | null>(null);
-  const [showSourceSelector, setShowSourceSelector] = useState<'license' | 'selfie' | null>(null);
+  const [isCapturing, setIsCapturing] = useState<'license' | 'selfie' | 'nin' | null>(null);
+  const [showSourceSelector, setShowSourceSelector] = useState<'license' | 'selfie' | 'nin' | null>(null);
 
-  const handleCapture = async (type: 'license' | 'selfie', source: CameraSource) => {
+  const handleCapture = async (type: 'license' | 'selfie' | 'nin', source: CameraSource) => {
     setShowSourceSelector(null);
     setIsCapturing(type);
     try {
       const photo = await CapacitorService.takePhoto(source);
       if (photo) {
-        setFormData(prev => ({ ...prev, [type === 'license' ? 'licenseImage' : 'selfieImage']: photo }));
+        if (type === 'license') setFormData(prev => ({ ...prev, licenseImage: photo }));
+        if (type === 'selfie') setFormData(prev => ({ ...prev, selfieImage: photo }));
+        if (type === 'nin') setFormData(prev => ({ ...prev, ninImage: photo }));
       }
     } finally {
       setIsCapturing(null);
@@ -42,15 +53,19 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ role, onSignUp, onBack, onG
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Simple validation
+    // Validation
     if (role === UserRole.DRIVER) {
-      if (!formData.licenseImage || !formData.selfieImage || !formData.backgroundCheckAccepted) {
-        alert("Please complete all driver requirements including documents and background check.");
+      if (!formData.licenseImage || !formData.selfieImage || !formData.ninImage || !formData.backgroundCheckAccepted) {
+        alert("Please complete all driver requirements including Driver License, Selfie, NIN image, and background check consent.");
+        return;
+      }
+      if (!formData.nin || !formData.address || !formData.age) {
+        alert("Please fill in all personal details including Address, Age and NIN.");
         return;
       }
     } else {
-      if (!formData.carType) {
-        alert("Please specify your car type.");
+      if (!formData.carType || !formData.address || !formData.nationality || !formData.age || !formData.gender) {
+        alert("Please complete all profile details including Address, Nationality, Age, Gender and Car Type.");
         return;
       }
     }
@@ -63,7 +78,15 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ role, onSignUp, onBack, onG
       licenseImage: formData.licenseImage,
       selfieImage: formData.selfieImage,
       backgroundCheckAccepted: formData.backgroundCheckAccepted,
-      avatar: formData.selfieImage // Use selfie as avatar for drivers
+      avatar: formData.selfieImage, // Use selfie as avatar for drivers
+      // New Fields
+      gender: formData.gender,
+      address: formData.address,
+      nationality: formData.nationality,
+      age: formData.age,
+      nin: formData.nin,
+      ninImage: formData.ninImage,
+      transmission: formData.transmission
     });
   };
 
@@ -143,92 +166,245 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ role, onSignUp, onBack, onG
 
           {/* Role Specific Fields */}
           {!isDriver ? (
-            <div className="flex flex-col gap-1.5 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Type of Car</label>
-              <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-4 h-14 border border-slate-200 dark:border-slate-800 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all">
-                <span className="material-symbols-outlined text-slate-400 mr-3">directions_car</span>
-                <input 
-                  required
-                  className="bg-transparent border-none text-slate-900 dark:text-white placeholder-slate-400 text-base font-medium w-full focus:ring-0 p-0" 
-                  placeholder="e.g. Mercedes S-Class, BMW 7 Series" 
-                  type="text" 
-                  value={formData.carType}
-                  onChange={(e) => setFormData({...formData, carType: e.target.value})}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1 mb-[-8px]">Required Credentials</p>
-              <div className="grid grid-cols-2 gap-3">
-                <button 
-                  type="button"
-                  onClick={() => setShowSourceSelector('license')}
-                  className={`flex flex-col items-center justify-center gap-2 h-40 rounded-2xl border-2 border-dashed transition-all relative overflow-hidden group ${
-                    formData.licenseImage ? 'border-green-500 bg-green-500/5' : 'border-slate-300 dark:border-slate-800 bg-white dark:bg-input-dark hover:border-primary'
-                  }`}
-                >
-                  {isCapturing === 'license' ? (
-                    <span className="material-symbols-outlined animate-spin text-primary">progress_activity</span>
-                  ) : formData.licenseImage ? (
-                    <>
-                      <img src={formData.licenseImage} className="w-full h-full object-cover" alt="License" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <span className="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">Update</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="bg-primary/10 text-primary w-12 h-12 rounded-full flex items-center justify-center mb-1">
-                        <span className="material-symbols-outlined text-2xl">badge</span>
-                      </div>
-                      <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">Driver License</span>
-                      <span className="text-[9px] text-primary font-bold">Tap to Add</span>
-                    </>
-                  )}
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setShowSourceSelector('selfie')}
-                  className={`flex flex-col items-center justify-center gap-2 h-40 rounded-2xl border-2 border-dashed transition-all relative overflow-hidden group ${
-                    formData.selfieImage ? 'border-green-500 bg-green-500/5' : 'border-slate-300 dark:border-slate-800 bg-white dark:bg-input-dark hover:border-primary'
-                  }`}
-                >
-                   {isCapturing === 'selfie' ? (
-                    <span className="material-symbols-outlined animate-spin text-primary">progress_activity</span>
-                  ) : formData.selfieImage ? (
-                    <>
-                      <img src={formData.selfieImage} className="w-full h-full object-cover" alt="Selfie" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <span className="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">Update</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="bg-primary/10 text-primary w-12 h-12 rounded-full flex items-center justify-center mb-1">
-                        <span className="material-symbols-outlined text-2xl">photo_camera</span>
-                      </div>
-                      <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">Profile Selfie</span>
-                      <span className="text-[9px] text-primary font-bold">Tap to Capture</span>
-                    </>
-                  )}
-                </button>
+            // OWNER FIELDS
+            <>
+              <div className="grid grid-cols-2 gap-4 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Gender</label>
+                  <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-3 h-14 border border-slate-200 dark:border-slate-800">
+                    <select 
+                      required
+                      className="bg-transparent border-none text-slate-900 dark:text-white text-base font-medium w-full focus:ring-0 p-0"
+                      value={formData.gender}
+                      onChange={(e) => setFormData({...formData, gender: e.target.value})}
+                    >
+                      <option value="" disabled className="dark:bg-surface-dark">Select</option>
+                      <option value="Male" className="dark:bg-surface-dark">Male</option>
+                      <option value="Female" className="dark:bg-surface-dark">Female</option>
+                      <option value="Prefer not to say" className="dark:bg-surface-dark">Other</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Age</label>
+                  <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-4 h-14 border border-slate-200 dark:border-slate-800">
+                    <input 
+                      required
+                      className="bg-transparent border-none text-slate-900 dark:text-white placeholder-slate-400 text-base font-medium w-full focus:ring-0 p-0" 
+                      placeholder="e.g. 35" 
+                      type="number" 
+                      value={formData.age}
+                      onChange={(e) => setFormData({...formData, age: e.target.value})}
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-start gap-3 p-4 rounded-2xl bg-primary/5 border border-primary/10">
-                <input 
-                  type="checkbox" 
-                  id="bg-check"
-                  required
-                  checked={formData.backgroundCheckAccepted}
-                  onChange={(e) => setFormData({...formData, backgroundCheckAccepted: e.target.checked})}
-                  className="mt-1 rounded border-slate-300 dark:border-slate-700 bg-transparent text-primary focus:ring-primary cursor-pointer" 
-                />
-                <label htmlFor="bg-check" className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium cursor-pointer">
-                  I consent to a professional driver background check. This includes driving record and criminal history verification.
-                </label>
+              <div className="flex flex-col gap-1.5 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Nationality</label>
+                <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-4 h-14 border border-slate-200 dark:border-slate-800 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all">
+                  <span className="material-symbols-outlined text-slate-400 mr-3">flag</span>
+                  <input 
+                    required
+                    className="bg-transparent border-none text-slate-900 dark:text-white placeholder-slate-400 text-base font-medium w-full focus:ring-0 p-0" 
+                    placeholder="e.g. Nigerian" 
+                    type="text" 
+                    value={formData.nationality}
+                    onChange={(e) => setFormData({...formData, nationality: e.target.value})}
+                  />
+                </div>
               </div>
-            </div>
+
+              <div className="flex flex-col gap-1.5 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Address</label>
+                <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-4 h-14 border border-slate-200 dark:border-slate-800 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all">
+                  <span className="material-symbols-outlined text-slate-400 mr-3">home</span>
+                  <input 
+                    required
+                    className="bg-transparent border-none text-slate-900 dark:text-white placeholder-slate-400 text-base font-medium w-full focus:ring-0 p-0" 
+                    placeholder="e.g. 123 Victoria Island" 
+                    type="text" 
+                    value={formData.address}
+                    onChange={(e) => setFormData({...formData, address: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Type of Car</label>
+                <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-4 h-14 border border-slate-200 dark:border-slate-800 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all">
+                  <span className="material-symbols-outlined text-slate-400 mr-3">directions_car</span>
+                  <input 
+                    required
+                    className="bg-transparent border-none text-slate-900 dark:text-white placeholder-slate-400 text-base font-medium w-full focus:ring-0 p-0" 
+                    placeholder="e.g. Mercedes S-Class, BMW 7 Series" 
+                    type="text" 
+                    value={formData.carType}
+                    onChange={(e) => setFormData({...formData, carType: e.target.value})}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            // DRIVER FIELDS
+            <>
+               <div className="grid grid-cols-2 gap-4 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
+                 <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Age</label>
+                  <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-4 h-14 border border-slate-200 dark:border-slate-800">
+                    <input 
+                      required
+                      className="bg-transparent border-none text-slate-900 dark:text-white placeholder-slate-400 text-base font-medium w-full focus:ring-0 p-0" 
+                      placeholder="Age" 
+                      type="number" 
+                      value={formData.age}
+                      onChange={(e) => setFormData({...formData, age: e.target.value})}
+                    />
+                  </div>
+                 </div>
+                 <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Transmission</label>
+                  <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-3 h-14 border border-slate-200 dark:border-slate-800">
+                    <select 
+                      required
+                      className="bg-transparent border-none text-slate-900 dark:text-white text-base font-medium w-full focus:ring-0 p-0"
+                      value={formData.transmission}
+                      onChange={(e) => setFormData({...formData, transmission: e.target.value as any})}
+                    >
+                      <option value="Manual" className="dark:bg-surface-dark">Manual</option>
+                      <option value="Automatic" className="dark:bg-surface-dark">Automatic</option>
+                      <option value="Both" className="dark:bg-surface-dark">Both</option>
+                    </select>
+                  </div>
+                 </div>
+               </div>
+
+               <div className="flex flex-col gap-1.5 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Home Address</label>
+                <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-4 h-14 border border-slate-200 dark:border-slate-800 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all">
+                  <span className="material-symbols-outlined text-slate-400 mr-3">home_pin</span>
+                  <input 
+                    required
+                    className="bg-transparent border-none text-slate-900 dark:text-white placeholder-slate-400 text-base font-medium w-full focus:ring-0 p-0" 
+                    placeholder="e.g. 10 Admiralty Way" 
+                    type="text" 
+                    value={formData.address}
+                    onChange={(e) => setFormData({...formData, address: e.target.value})}
+                  />
+                </div>
+              </div>
+
+               <div className="flex flex-col gap-1.5 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">NIN Number</label>
+                <div className="flex items-center bg-white dark:bg-input-dark rounded-xl px-4 h-14 border border-slate-200 dark:border-slate-800 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all">
+                  <span className="material-symbols-outlined text-slate-400 mr-3">fingerprint</span>
+                  <input 
+                    required
+                    className="bg-transparent border-none text-slate-900 dark:text-white placeholder-slate-400 text-base font-medium w-full focus:ring-0 p-0" 
+                    placeholder="National Identity Number" 
+                    type="text" 
+                    value={formData.nin}
+                    onChange={(e) => setFormData({...formData, nin: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-4 animate-slide-up stagger-2 opacity-0" style={{ animationFillMode: 'forwards' }}>
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-300 ml-1 mb-[-8px]">Required Documents</p>
+                
+                {/* Image Grid */}
+                <div className="grid grid-cols-3 gap-2">
+                  {/* License */}
+                  <button 
+                    type="button"
+                    onClick={() => setShowSourceSelector('license')}
+                    className={`flex flex-col items-center justify-center gap-1 h-32 rounded-xl border-2 border-dashed transition-all relative overflow-hidden group ${
+                      formData.licenseImage ? 'border-green-500 bg-green-500/5' : 'border-slate-300 dark:border-slate-800 bg-white dark:bg-input-dark hover:border-primary'
+                    }`}
+                  >
+                    {isCapturing === 'license' ? (
+                      <span className="material-symbols-outlined animate-spin text-primary">progress_activity</span>
+                    ) : formData.licenseImage ? (
+                      <>
+                        <img src={formData.licenseImage} className="w-full h-full object-cover" alt="License" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">Update</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-slate-400 text-2xl">badge</span>
+                        <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase">License</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Selfie */}
+                  <button 
+                    type="button"
+                    onClick={() => setShowSourceSelector('selfie')}
+                    className={`flex flex-col items-center justify-center gap-1 h-32 rounded-xl border-2 border-dashed transition-all relative overflow-hidden group ${
+                      formData.selfieImage ? 'border-green-500 bg-green-500/5' : 'border-slate-300 dark:border-slate-800 bg-white dark:bg-input-dark hover:border-primary'
+                    }`}
+                  >
+                     {isCapturing === 'selfie' ? (
+                      <span className="material-symbols-outlined animate-spin text-primary">progress_activity</span>
+                    ) : formData.selfieImage ? (
+                      <>
+                        <img src={formData.selfieImage} className="w-full h-full object-cover" alt="Selfie" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">Update</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-slate-400 text-2xl">photo_camera</span>
+                        <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase">Selfie</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* NIN Image */}
+                  <button 
+                    type="button"
+                    onClick={() => setShowSourceSelector('nin')}
+                    className={`flex flex-col items-center justify-center gap-1 h-32 rounded-xl border-2 border-dashed transition-all relative overflow-hidden group ${
+                      formData.ninImage ? 'border-green-500 bg-green-500/5' : 'border-slate-300 dark:border-slate-800 bg-white dark:bg-input-dark hover:border-primary'
+                    }`}
+                  >
+                     {isCapturing === 'nin' ? (
+                      <span className="material-symbols-outlined animate-spin text-primary">progress_activity</span>
+                    ) : formData.ninImage ? (
+                      <>
+                        <img src={formData.ninImage} className="w-full h-full object-cover" alt="NIN" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="text-[10px] text-white font-bold bg-black/60 px-2 py-1 rounded">Update</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-slate-400 text-2xl">id_card</span>
+                        <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase">NIN Card</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="flex items-start gap-3 p-4 rounded-2xl bg-primary/5 border border-primary/10">
+                  <input 
+                    type="checkbox" 
+                    id="bg-check"
+                    required
+                    checked={formData.backgroundCheckAccepted}
+                    onChange={(e) => setFormData({...formData, backgroundCheckAccepted: e.target.checked})}
+                    className="mt-1 rounded border-slate-300 dark:border-slate-700 bg-transparent text-primary focus:ring-primary cursor-pointer" 
+                  />
+                  <label htmlFor="bg-check" className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium cursor-pointer">
+                    I consent to a professional background check including criminal history and driving record verification.
+                  </label>
+                </div>
+              </div>
+            </>
           )}
 
           <div className="flex flex-col gap-1.5 animate-slide-up stagger-3 opacity-0" style={{ animationFillMode: 'forwards' }}>
@@ -293,7 +469,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ role, onSignUp, onBack, onG
               
               <div className="grid grid-cols-2 gap-4 w-full">
                 <button 
-                  onClick={() => handleCapture(showSourceSelector, CameraSource.Camera)}
+                  onClick={() => handleCapture(showSourceSelector!, CameraSource.Camera)}
                   className="flex flex-col items-center justify-center gap-3 p-6 rounded-3xl bg-primary/5 border border-primary/10 hover:bg-primary/10 transition-colors group active:scale-95"
                 >
                   <div className="w-16 h-16 rounded-2xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/20 group-hover:scale-110 transition-transform">
@@ -303,7 +479,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ role, onSignUp, onBack, onG
                 </button>
                 
                 <button 
-                  onClick={() => handleCapture(showSourceSelector, CameraSource.Photos)}
+                  onClick={() => handleCapture(showSourceSelector!, CameraSource.Photos)}
                   className="flex flex-col items-center justify-center gap-3 p-6 rounded-3xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 transition-colors group active:scale-95"
                 >
                   <div className="w-16 h-16 rounded-2xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center group-hover:scale-110 transition-transform">
