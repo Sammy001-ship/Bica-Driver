@@ -171,12 +171,13 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
     );
   }
 
-  const mapMarkers: any[] = [{ position: driverPos, title: 'You', icon: 'taxi' }];
+  // Ensure all markers have a unique 'id' property
+  const mapMarkers: any[] = [{ id: 'driver-me', position: driverPos, title: 'You', icon: 'taxi' }];
   if (activeRide) {
     if (ridePhase === 'pickup' || ridePhase === 'arrived') {
-       mapMarkers.push({ position: activeRide.coords, title: 'Pickup Location', icon: 'pickup' });
+       mapMarkers.push({ id: 'pickup-point', position: activeRide.coords, title: 'Pickup Location', icon: 'pickup' });
     } else if (ridePhase === 'trip') {
-       mapMarkers.push({ position: activeRide.destCoords, title: 'Destination', icon: 'destination' });
+       mapMarkers.push({ id: 'dest-point', position: activeRide.destCoords, title: 'Destination', icon: 'destination' });
     }
   }
 
@@ -195,12 +196,16 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
             </button>
           )}
           
-          <div onClick={() => !activeRide && setIsOnline(!isOnline)} className={`flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border border-white/10 transition-all ${activeRide ? 'bg-primary text-white pointer-events-none' : isOnline ? 'bg-primary/90 text-white cursor-pointer' : 'bg-surface-dark/80 text-slate-400 cursor-pointer'}`}>
+          <button 
+            onClick={() => !activeRide && setIsOnline(!isOnline)} 
+            disabled={!!activeRide}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border border-white/10 transition-all ${activeRide ? 'bg-primary text-white cursor-default' : isOnline ? 'bg-primary/90 text-white cursor-pointer' : 'bg-surface-dark/80 text-slate-400 cursor-pointer'}`}
+          >
             <div className={`w-2.5 h-2.5 rounded-full ${isOnline || activeRide ? 'bg-green-400 animate-pulse' : 'bg-slate-500'}`}></div>
             <span className="text-sm font-bold tracking-tight uppercase">
               {activeRide ? getPhaseText() : isOnline ? 'Online' : 'Offline'}
             </span>
-          </div>
+          </button>
 
           <button onClick={onOpenProfile} className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg active:scale-90 transition-all">
             <span className="material-symbols-outlined">person</span>

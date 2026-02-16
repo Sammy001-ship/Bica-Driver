@@ -1,24 +1,18 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { CapacitorService } from '../services/CapacitorService';
+import { Config } from '../services/Config';
 import { GoogleGenAI } from "@google/genai";
 import InteractiveMap from '../components/InteractiveMap';
 import { IMAGES } from '../constants';
 
 interface SearchResult {
+  id: string;
   display_name: string;
+  description: string;
   lat: number;
   lon: number;
-  id: string;
-  description?: string;
-}
-
-interface NearbyPlace {
-  id: string;
-  name: string;
-  vicinity: string;
-  location: { lat: number; lng: number };
-  distance: string;
-  type: string;
+  category: 'LGA' | 'Airport' | 'Hotel' | 'Shopping' | 'Residential' | 'Commercial' | 'Tourism' | 'Education' | 'Transport' | 'District';
 }
 
 interface RequestRideScreenProps {
@@ -35,56 +29,59 @@ const DISCOVERY_CATEGORIES = [
   { label: 'Malls', icon: 'shopping_cart', type: 'shopping_mall' }
 ];
 
-// Mock Data for Demo - Expanded Lagos Database
-const MOCK_LAGOS_PLACES = [
-  // Airports
-  { id: '1', name: "Murtala Muhammed Intl Airport (MMIA)", vicinity: "Ikeja, Lagos", lat: 6.5774, lng: 3.3210, type: 'airport' },
-  { id: '1b', name: "MMA2 Terminal", vicinity: "Ikeja, Lagos", lat: 6.5770, lng: 3.3200, type: 'airport' },
+// Comprehensive Lagos Database with all 20 LGAs alphabetically
+const LAGOS_LOCATIONS: SearchResult[] = [
+  // Airports & Transport
+  { id: 'lm_mmia', display_name: 'Murtala Muhammed Int. Airport (MMIA)', description: 'Ikeja, Lagos', lat: 6.5774, lon: 3.3210, category: 'Airport' },
+  { id: 'lm_mma2', display_name: 'MMA2 Terminal', description: 'Ikeja, Lagos', lat: 6.5732, lon: 3.3338, category: 'Airport' },
+  { id: 'lm_gigu', display_name: 'GIGM Jibowu Terminal', description: 'Yaba, Lagos', lat: 6.5255, lon: 3.3688, category: 'Transport' },
   
-  // Island (VI, Lekki, Ikoyi)
-  { id: '2', name: "Eko Hotels & Suites", vicinity: "Victoria Island, Lagos", lat: 6.4253, lng: 3.4308, type: 'lodging' },
-  { id: '3', name: "Lekki Conservation Centre", vicinity: "Lekki-Epe Expy, Lagos", lat: 6.4417, lng: 3.5358, type: 'park' },
-  { id: '5', name: "Landmark Beach", vicinity: "Water Corp Dr, VI", lat: 6.4217, lng: 3.4475, type: 'restaurant' },
-  { id: '6', name: "Civic Center", vicinity: "Ozumba Mbadiwe Ave, VI", lat: 6.4357, lng: 3.4439, type: 'point_of_interest' },
-  { id: '7', name: "Banana Island", vicinity: "Ikoyi, Lagos", lat: 6.4549, lng: 3.4246, type: 'point_of_interest' },
-  { id: '8', name: "Ikoyi Club 1938", vicinity: "Ikoyi, Lagos", lat: 6.4490, lng: 3.4350, type: 'point_of_interest' },
-  { id: '9', name: "The Palms Shopping Mall", vicinity: "Lekki, Lagos", lat: 6.4346, lng: 3.4471, type: 'shopping_mall' },
-  { id: '10', name: "Radisson Blu Anchorage", vicinity: "Victoria Island", lat: 6.4340, lng: 3.4140, type: 'lodging' },
-  { id: '10b', name: "Lekki Phase 1 Gate", vicinity: "Lekki, Lagos", lat: 6.4450, lng: 3.4600, type: 'point_of_interest' },
-  { id: '10c', name: "Admiralty Way", vicinity: "Lekki Phase 1", lat: 6.4480, lng: 3.4700, type: 'point_of_interest' },
-  { id: '10d', name: "Nike Art Gallery", vicinity: "Lekki, Lagos", lat: 6.4380, lng: 3.4800, type: 'point_of_interest' },
+  // Lagos State LGAs (Alphabetical)
+  { id: 'lga_agege', display_name: 'Agege', description: 'Lagos State LGA', lat: 6.6180, lon: 3.3209, category: 'LGA' },
+  { id: 'lga_ajeromi', display_name: 'Ajeromi-Ifelodun', description: 'Lagos State LGA', lat: 6.4555, lon: 3.3339, category: 'LGA' },
+  { id: 'lga_alimosho', display_name: 'Alimosho', description: 'Lagos State LGA', lat: 6.6094, lon: 3.2963, category: 'LGA' },
+  { id: 'lga_amuwo', display_name: 'Amuwo-Odofin', description: 'Lagos State LGA', lat: 6.4667, lon: 3.2833, category: 'LGA' },
+  { id: 'lga_apapa', display_name: 'Apapa', description: 'Lagos State LGA', lat: 6.4553, lon: 3.3641, category: 'LGA' },
+  { id: 'lga_badagry', display_name: 'Badagry', description: 'Lagos State LGA', lat: 6.4316, lon: 2.8876, category: 'LGA' },
+  { id: 'lga_epe', display_name: 'Epe', description: 'Lagos State LGA', lat: 6.5841, lon: 3.9754, category: 'LGA' },
+  { id: 'lga_etiosa', display_name: 'Eti-Osa', description: 'Lagos State LGA', lat: 6.4478, lon: 3.4737, category: 'LGA' },
+  { id: 'lga_ibeju', display_name: 'Ibeju-Lekki', description: 'Lagos State LGA', lat: 6.4667, lon: 3.6667, category: 'LGA' },
+  { id: 'lga_ifako', display_name: 'Ifako-Ijaiye', description: 'Lagos State LGA', lat: 6.6575, lon: 3.3179, category: 'LGA' },
+  { id: 'lga_ikeja', display_name: 'Ikeja', description: 'State Capital & LGA', lat: 6.6018, lon: 3.3515, category: 'LGA' },
+  { id: 'lga_ikorodu', display_name: 'Ikorodu', description: 'Lagos State LGA', lat: 6.6191, lon: 3.5041, category: 'LGA' },
+  { id: 'lga_kosofe', display_name: 'Kosofe', description: 'Lagos State LGA', lat: 6.5744, lon: 3.3853, category: 'LGA' },
+  { id: 'lga_lagos_island', display_name: 'Lagos Island', description: 'Lagos State LGA', lat: 6.4549, lon: 3.4246, category: 'LGA' },
+  { id: 'lga_lagos_mainland', display_name: 'Lagos Mainland', description: 'Lagos State LGA', lat: 6.5059, lon: 3.3764, category: 'LGA' },
+  { id: 'lga_mushin', display_name: 'Mushin', description: 'Lagos State LGA', lat: 6.5273, lon: 3.3552, category: 'LGA' },
+  { id: 'lga_ojo', display_name: 'Ojo', description: 'Lagos State LGA', lat: 6.4633, lon: 3.1678, category: 'LGA' },
+  { id: 'lga_oshodi', display_name: 'Oshodi-Isolo', description: 'Lagos State LGA', lat: 6.5539, lon: 3.3364, category: 'LGA' },
+  { id: 'lga_shomolu', display_name: 'Shomolu', description: 'Lagos State LGA', lat: 6.5392, lon: 3.3842, category: 'LGA' },
+  { id: 'lga_surulere', display_name: 'Surulere', description: 'Lagos State LGA', lat: 6.4972, lon: 3.3542, category: 'LGA' },
+  
+  // Popular Districts & Landmarks
+  { id: 'lm_lekki1', display_name: 'Lekki Phase 1', description: 'Eti-Osa', lat: 6.4478, lon: 3.4737, category: 'District' },
+  { id: 'lm_vi', display_name: 'Victoria Island', description: 'Business District', lat: 6.4253, lon: 3.4308, category: 'District' },
+  { id: 'lm_ikoyi', display_name: 'Ikoyi', description: 'Luxury District', lat: 6.4549, lon: 3.4246, category: 'District' },
+  { id: 'lm_yaba', display_name: 'Yaba', description: 'Tech & Education Hub', lat: 6.5165, lon: 3.3853, category: 'District' },
+  { id: 'lm_ajah', display_name: 'Ajah', description: 'Eti-Osa', lat: 6.4698, lon: 3.5852, category: 'District' },
+  { id: 'lm_maryland', display_name: 'Maryland', description: 'Kosofe', lat: 6.5744, lon: 3.3653, category: 'District' },
+  { id: 'lm_festac', display_name: 'Festac Town', description: 'Amuwo-Odofin', lat: 6.4667, lon: 3.2833, category: 'District' },
 
-  // Mainland (Ikeja, Maryland, Magodo)
-  { id: '4', name: "Ikeja City Mall", vicinity: "Alausa, Ikeja", lat: 6.6142, lng: 3.3581, type: 'shopping_mall' },
-  { id: '11', name: "Maryland Mall", vicinity: "Maryland, Lagos", lat: 6.5720, lng: 3.3670, type: 'shopping_mall' },
-  { id: '12', name: "Kalakuta Republic Museum", vicinity: "Ikeja, Lagos", lat: 6.6050, lng: 3.3500, type: 'point_of_interest' },
-  { id: '13', name: "Magodo Phase 2", vicinity: "Magodo, Lagos", lat: 6.6200, lng: 3.3800, type: 'point_of_interest' },
-  { id: '14', name: "Berger Bus Stop", vicinity: "Berger, Lagos", lat: 6.6400, lng: 3.3700, type: 'point_of_interest' },
-  { id: '15', name: "Computer Village", vicinity: "Ikeja, Lagos", lat: 6.5960, lng: 3.3420, type: 'shopping_mall' },
-  { id: '16', name: "Sheraton Lagos Hotel", vicinity: "Mobolaji Bank Anthony, Ikeja", lat: 6.5820, lng: 3.3620, type: 'lodging' },
-  { id: '16b', name: "Allen Avenue", vicinity: "Ikeja, Lagos", lat: 6.6000, lng: 3.3500, type: 'point_of_interest' },
-
-  // Yaba / Surulere
-  { id: '17', name: "University of Lagos (UNILAG)", vicinity: "Akoka, Yaba", lat: 6.5170, lng: 3.3970, type: 'school' },
-  { id: '18', name: "Yaba College of Technology", vicinity: "Yaba, Lagos", lat: 6.5200, lng: 3.3700, type: 'school' },
-  { id: '19', name: "Tejuosho Market", vicinity: "Yaba, Lagos", lat: 6.5050, lng: 3.3650, type: 'shopping_mall' },
-  { id: '20', name: "National Stadium", vicinity: "Surulere, Lagos", lat: 6.4970, lng: 3.3600, type: 'point_of_interest' },
-  { id: '21', name: "Leisure Mall", vicinity: "Adeniran Ogunsanya, Surulere", lat: 6.4950, lng: 3.3550, type: 'shopping_mall' },
-  { id: '22', name: "Teslim Balogun Stadium", vicinity: "Surulere, Lagos", lat: 6.4980, lng: 3.3620, type: 'point_of_interest' },
-  { id: '22b', name: "Bode Thomas Street", vicinity: "Surulere, Lagos", lat: 6.4900, lng: 3.3500, type: 'point_of_interest' },
-
-  // Greater Lagos
-  { id: '23', name: "Oshodi Transport Interchange", vicinity: "Oshodi, Lagos", lat: 6.5550, lng: 3.3450, type: 'point_of_interest' },
-  { id: '24', name: "Gbagada General Hospital", vicinity: "Gbagada, Lagos", lat: 6.5500, lng: 3.3900, type: 'hospital' },
-  { id: '25', name: "Third Mainland Bridge", vicinity: "Lagos Lagoon", lat: 6.5300, lng: 3.4000, type: 'point_of_interest' },
-  { id: '26', name: "Apapa Port", vicinity: "Apapa, Lagos", lat: 6.4400, lng: 3.3600, type: 'point_of_interest' },
-  { id: '27', name: "Festac Town (First Gate)", vicinity: "Festac, Lagos", lat: 6.4700, lng: 3.2900, type: 'point_of_interest' },
-  { id: '28', name: "Trade Fair Complex", vicinity: "Ojo, Lagos", lat: 6.4600, lng: 3.2500, type: 'shopping_mall' },
-  { id: '29', name: "Synagogue Church (SCOAN)", vicinity: "Ikotun, Lagos", lat: 6.5400, lng: 3.2700, type: 'point_of_interest' },
-  { id: '30', name: "Whispering Palms", vicinity: "Badagry, Lagos", lat: 6.4000, lng: 2.9000, type: 'lodging' },
-  { id: '31', name: "Lufasi Nature Park", vicinity: "Lekki-Epe Expy", lat: 6.4700, lng: 3.6500, type: 'park' },
-  { id: '32', name: "Novare Lekki Mall", vicinity: "Sangotedo, Lagos", lat: 6.4800, lng: 3.6200, type: 'shopping_mall' },
-  { id: '33', name: "Jubilee Bridge", vicinity: "Ajah, Lagos", lat: 6.4650, lng: 3.5600, type: 'point_of_interest' }
+  // Landmarks & Commercial
+  { id: 'lm_landmark', display_name: 'Landmark Beach', description: 'Water Corporation Dr, VI', lat: 6.4227, lon: 3.4437, category: 'Tourism' },
+  { id: 'lm_icm', display_name: 'Ikeja City Mall', description: 'Alausa, Ikeja', lat: 6.6142, lon: 3.3581, category: 'Shopping' },
+  { id: 'lm_palms', display_name: 'The Palms Shopping Mall', description: 'Lekki', lat: 6.4357, lon: 3.4418, category: 'Shopping' },
+  { id: 'lm_eko_hotel', display_name: 'Eko Hotels & Suites', description: 'Adetokunbo Ademola, VI', lat: 6.4267, lon: 3.4301, category: 'Hotel' },
+  { id: 'lm_civic', display_name: 'The Civic Centre', description: 'Ozumba Mbadiwe, VI', lat: 6.4316, lon: 3.4116, category: 'Commercial' },
+  { id: 'lm_unilag', display_name: 'University of Lagos', description: 'Akoka, Yaba', lat: 6.5165, lon: 3.3964, category: 'Education' },
+  { id: 'lm_banana', display_name: 'Banana Island', description: 'Ikoyi', lat: 6.4563, lon: 3.4503, category: 'Residential' },
+  { id: 'lm_vgc', display_name: 'Victoria Garden City (VGC)', description: 'Lekki-Epe Expressway', lat: 6.4674, lon: 3.5612, category: 'Residential' },
+  { id: 'lm_magodo', display_name: 'Magodo Phase 2', description: 'Shangisha', lat: 6.6080, lon: 3.3850, category: 'Residential' },
+  { id: 'lm_allen', display_name: 'Allen Avenue', description: 'Ikeja', lat: 6.5985, lon: 3.3533, category: 'Commercial' },
+  { id: 'lm_comp_village', display_name: 'Computer Village', description: 'Otigba St, Ikeja', lat: 6.5965, lon: 3.3421, category: 'Commercial' },
+  { id: 'lm_national_theatre', display_name: 'National Arts Theatre', description: 'Iganmu', lat: 6.4789, lon: 3.3688, category: 'Tourism' },
+  { id: 'lm_lufasi', display_name: 'Lufasi Nature Park', description: 'Lekki-Epe Expy', lat: 6.4833, lon: 3.6167, category: 'Tourism' },
+  { id: 'lm_nike', display_name: 'Nike Art Gallery', description: 'Lekki Phase 1', lat: 6.4446, lon: 3.4864, category: 'Tourism' }
 ];
 
 const MOCK_ASSIGNED_DRIVER = {
@@ -93,7 +90,7 @@ const MOCK_ASSIGNED_DRIVER = {
   trips: 1520,
   car: "Toyota Camry 2022",
   plate: "LND-823-XA",
-  avatar: IMAGES.DRIVER_CARD // Reusing existing image for demo
+  avatar: IMAGES.DRIVER_CARD
 };
 
 const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, onBack }) => {
@@ -110,7 +107,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
   const [destCoords, setDestCoords] = useState<[number, number] | null>(null);
   const [destResults, setDestResults] = useState<SearchResult[]>([]);
   
-  const [nearbyResults, setNearbyResults] = useState<NearbyPlace[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   
   const [activeSearchField, setActiveSearchField] = useState<'pickup' | 'destination' | null>(null);
@@ -136,16 +132,14 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
         setUserRealTimePos(coords);
         setPickupCoords(coords);
         setMapCenter(coords);
-        setPickupLocation("Current Location (Lagos)");
-        fetchNearbyResults(coords[0], coords[1]);
+        setPickupLocation("Current Location");
       } else {
-        // Fallback for demo if geolocation fails
-        const fallback: [number, number] = [6.4253, 3.4308]; // Eko Hotel
+        // Fallback to Lagos center (Ikeja/Mainland)
+        const fallback: [number, number] = [6.5244, 3.3792]; 
         setUserRealTimePos(fallback);
         setPickupCoords(fallback);
         setMapCenter(fallback);
-        setPickupLocation("Victoria Island, Lagos");
-        fetchNearbyResults(fallback[0], fallback[1]);
+        setPickupLocation("Lagos, Nigeria");
       }
 
       if ("geolocation" in navigator) {
@@ -169,19 +163,34 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     };
   }, []);
 
-  const fetchNearbyResults = (lat: number, lng: number, type: string = 'point_of_interest') => {
-    // Simulated nearby search
-    const filtered = MOCK_LAGOS_PLACES.filter(p => type === 'point_of_interest' || p.type === type || (type === 'restaurant' && p.type === 'lodging')).slice(0, 5);
-    
-    const results: NearbyPlace[] = filtered.map(p => ({
-      id: p.id,
-      name: p.name,
-      vicinity: p.vicinity,
-      location: { lat: p.lat, lng: p.lng },
-      distance: (Math.random() * 5 + 1).toFixed(1) + ' km',
-      type: p.type
-    }));
-    setNearbyResults(results);
+  // Updated Search Logic using local database
+  const searchLocations = (query: string, field: 'pickup' | 'destination') => {
+    if (!query) {
+      // Show prioritized list: Popular Airports + LGAs
+      const popular = LAGOS_LOCATIONS.filter(l => 
+        l.category === 'Airport' || l.category === 'LGA' || l.display_name.includes('VI') || l.display_name.includes('Lekki')
+      );
+      // Sort so LGAs are alphabetical, but keep Airports at top
+      const sorted = popular.sort((a, b) => {
+         if (a.category === 'Airport' && b.category !== 'Airport') return -1;
+         if (a.category !== 'Airport' && b.category === 'Airport') return 1;
+         return a.display_name.localeCompare(b.display_name);
+      });
+      
+      if (field === 'pickup') setPickupResults(sorted);
+      else setDestResults(sorted);
+      return;
+    }
+
+    const lowerQuery = query.toLowerCase();
+    const filtered = LAGOS_LOCATIONS.filter(loc => 
+      loc.display_name.toLowerCase().includes(lowerQuery) || 
+      loc.description.toLowerCase().includes(lowerQuery) ||
+      loc.category.toLowerCase().includes(lowerQuery)
+    ).sort((a, b) => a.display_name.localeCompare(b.display_name));
+
+    if (field === 'pickup') setPickupResults(filtered);
+    else setDestResults(filtered);
   };
 
   const handleInputChange = (val: string, field: 'pickup' | 'destination') => {
@@ -192,22 +201,19 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
       setDestination(val);
     }
     setActiveSearchField(field);
+    searchLocations(val, field);
+  };
 
-    if (val.length > 1) {
-       // Mock suggestions
-       const suggestions = MOCK_LAGOS_PLACES.filter(p => p.name.toLowerCase().includes(val.toLowerCase()) || p.vicinity.toLowerCase().includes(val.toLowerCase()));
-       const results: SearchResult[] = suggestions.map(p => ({
-         display_name: p.name,
-         description: p.vicinity,
-         id: p.id,
-         lat: p.lat,
-         lon: p.lng
-       }));
-       if (field === 'pickup') setPickupResults(results);
-       else setDestResults(results);
+  const handleInputFocus = (field: 'pickup' | 'destination') => {
+    setActiveSearchField(field);
+    const currentVal = field === 'pickup' ? pickupLocation : destination;
+    
+    // If empty or default text, show instant popular locations
+    if (!currentVal || currentVal === 'Acquiring location...' || currentVal === 'Current Location' || currentVal === 'Lagos, Nigeria') {
+      // Show priority locations immediately
+      searchLocations("", field);
     } else {
-       if (field === 'pickup') setPickupResults([]);
-       else setDestResults([]);
+      searchLocations(currentVal, field);
     }
   };
 
@@ -217,55 +223,28 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     if (field === 'pickup') {
       setPickupLocation(res.display_name);
       setPickupCoords(coords);
+      setPickupResults([]);
     } else {
       setDestination(res.display_name);
       setDestCoords(coords);
+      setDestResults([]);
     }
+    
     setMapCenter(coords);
     setActiveSearchField(null);
     CapacitorService.triggerHaptic();
     
-    fetchNearbyResults(coords[0], coords[1]);
     generateAiInsight(res.display_name);
   };
 
-  const triggerManualSearch = (field: 'pickup' | 'destination') => {
-    const val = field === 'pickup' ? pickupLocation : destination;
-    setIsAiLoading(true);
-    
-    setTimeout(() => {
-      setIsAiLoading(false);
-      const matched = MOCK_LAGOS_PLACES.find(p => p.name.toLowerCase().includes(val.toLowerCase()));
-      if (matched) {
-        selectResult({
-          display_name: matched.name,
-          description: matched.vicinity,
-          id: matched.id,
-          lat: matched.lat,
-          lon: matched.lng
-        }, field);
-      } else {
-        const random = MOCK_LAGOS_PLACES[Math.floor(Math.random() * MOCK_LAGOS_PLACES.length)];
-        selectResult({
-          display_name: random.name,
-          description: random.vicinity,
-          id: random.id,
-          lat: random.lat,
-          lon: random.lng
-        }, field);
-        alert(`Exact location "${val}" not found in demo database. Snapped to ${random.name}.`);
-      }
-    }, 1000);
-  };
-
   const generateAiInsight = async (locationName: string) => {
-    if (!process.env.API_KEY) return;
+    if (!Config.apiKey) return;
     setIsAiLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: Config.apiKey });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Provide a short, 1-sentence elite travel tip or safety status for a premium chauffeur service heading to: ${locationName} in Nigeria. Keep it professional and luxury-focused.`,
+        contents: `Provide a short, 1-sentence elite travel tip or safety status for a premium chauffeur service heading to: ${locationName} in Lagos, Nigeria. Keep it professional, concise and luxury-focused.`,
       });
       setAiInsight(response.text || "Direct route optimized for safety.");
     } catch (e) {
@@ -279,8 +258,10 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     CapacitorService.triggerHaptic();
     if (id === 'pickup') {
       setPickupCoords(newPos);
+      setPickupLocation("Pinned Location");
     } else {
       setDestCoords(newPos);
+      setDestination("Pinned Location");
     }
   };
 
@@ -291,24 +272,26 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
       setMapCenter(userRealTimePos);
       setPickupCoords(userRealTimePos);
       setPickupLocation("Current Location");
-      fetchNearbyResults(userRealTimePos[0], userRealTimePos[1]);
+    } else {
+      // Refresh location if null
+      const pos = await CapacitorService.getCurrentLocation();
+      if (pos) {
+        const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+        setUserRealTimePos(coords);
+        setMapCenter(coords);
+        setPickupCoords(coords);
+        setPickupLocation("Current Location");
+      }
     }
   };
 
   const handleCategorySelect = (categoryType: string) => {
     CapacitorService.triggerHaptic();
     setActiveCategory(categoryType);
-    const origin = pickupCoords || userRealTimePos;
-    if (origin) {
-      fetchNearbyResults(origin[0], origin[1], categoryType);
-    }
-  };
-
-  const selectNearbyPlace = (place: NearbyPlace) => {
-    setDestination(place.name);
-    setDestCoords([place.location.lat, place.location.lng]);
-    setMapCenter([place.location.lat, place.location.lng]);
-    CapacitorService.triggerHaptic();
+    // Move map to a relevant location for category (Simulated)
+    if (categoryType === 'airport') setMapCenter([6.5774, 3.3210]); // MMIA
+    if (categoryType === 'lodging') setMapCenter([6.4267, 3.4301]); // Eko Hotel
+    if (categoryType === 'shopping_mall') setMapCenter([6.4357, 3.4418]); // Palms
   };
 
   const isFormValid = () => {
@@ -340,10 +323,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
   };
 
   const handleSubmitRating = () => {
-    // In a real app, send rating/feedback to backend here
     console.log(`Submitted Rating: ${rating}, Feedback: ${feedbackText}`);
-    
-    // Reset Flow
     setRating(0);
     setFeedbackText('');
     setDestination('');
@@ -357,17 +337,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
   if (pickupCoords) mapMarkers.push({ id: 'pickup', position: pickupCoords, title: 'Direct Pickup', icon: 'pickup', draggable: rideState === 'IDLE' });
   if (destCoords) mapMarkers.push({ id: 'destination', position: destCoords, title: 'Direct Drop-off', icon: 'destination', draggable: rideState === 'IDLE' });
   
-  if (rideState === 'IDLE') {
-    nearbyResults.forEach(p => {
-      mapMarkers.push({ 
-        id: p.id, 
-        position: [p.location.lat, p.location.lng], 
-        title: p.name, 
-        icon: 'nearby' 
-      });
-    });
-  } else if (rideState === 'ASSIGNED' || rideState === 'IN_PROGRESS') {
-    // Show driver marker simulation could be added here
+  if (rideState === 'ASSIGNED' || rideState === 'IN_PROGRESS') {
     mapMarkers.push({
       id: 'driver',
       position: pickupCoords || [6.5, 3.3], // Simulating driver at pickup
@@ -375,6 +345,21 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
       icon: 'taxi'
     });
   }
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'Airport': return 'flight';
+      case 'Hotel': return 'hotel';
+      case 'Shopping': return 'shopping_bag';
+      case 'Education': return 'school';
+      case 'Tourism': return 'attractions';
+      case 'LGA': return 'map';
+      case 'District': return 'location_city';
+      case 'Residential': return 'home';
+      case 'Transport': return 'directions_bus';
+      default: return 'place';
+    }
+  };
 
   // Overlay for active ride states
   const renderRideStatusOverlay = () => {
@@ -562,24 +547,39 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
                     placeholder="Where from?"
                     value={pickupLocation}
                     onChange={e => handleInputChange(e.target.value, 'pickup')}
-                    onFocus={() => setActiveSearchField('pickup')}
+                    onFocus={() => handleInputFocus('pickup')}
+                    onBlur={() => setTimeout(() => { if(!activeSearchField) setActiveSearchField(null) }, 200)} // Delay hide to allow click
                   />
-                  <button 
-                    onClick={() => triggerManualSearch('pickup')}
-                    className="size-12 flex items-center justify-center rounded-2xl bg-accent text-white hover:bg-accent/80 active:scale-90 transition-all shrink-0 shadow-lg shadow-accent/20"
-                    title="Search manual location"
-                  >
+                  <div className="size-12 flex items-center justify-center text-slate-400">
                     <span className="material-symbols-outlined text-[20px]">search</span>
-                  </button>
+                  </div>
                 </div>
-                {activeSearchField === 'pickup' && pickupResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-surface-dark rounded-3xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto no-scrollbar">
-                    {pickupResults.map(res => (
-                      <button key={res.id} onClick={() => selectResult(res, 'pickup')} className="w-full p-4 text-left border-b border-white/5 hover:bg-primary/20 flex flex-col group transition-all">
-                        <span className="text-white font-bold text-sm group-hover:text-accent">{res.display_name}</span>
-                        <span className="text-slate-500 text-[10px] truncate">{res.description}</span>
-                      </button>
-                    ))}
+                {activeSearchField === 'pickup' && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-surface-dark rounded-3xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto no-scrollbar animate-slide-up">
+                    {pickupResults.length > 0 ? (
+                      <>
+                        <div className="px-4 py-2 bg-black/20 text-[10px] font-bold uppercase text-slate-500 tracking-widest">
+                          {pickupLocation.length < 2 ? 'Popular Locations' : 'Search Results'}
+                        </div>
+                        {pickupResults.map(res => (
+                          <button key={res.id} onClick={() => selectResult(res, 'pickup')} className="w-full p-4 text-left border-b border-white/5 hover:bg-primary/20 flex items-center gap-3 group transition-all">
+                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400 group-hover:text-accent">
+                              <span className="material-symbols-outlined text-sm">{getCategoryIcon(res.category)}</span>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-white font-bold text-sm group-hover:text-accent">{res.display_name}</span>
+                              <span className="text-slate-500 text-[10px] truncate">{res.description}</span>
+                            </div>
+                            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-slate-500">{res.category}</span>
+                          </button>
+                        ))}
+                      </>
+                    ) : (
+                       <div className="p-6 text-center text-slate-500 text-xs flex flex-col items-center gap-2">
+                         <span className="material-symbols-outlined text-2xl opacity-50">wrong_location</span>
+                         No locations found
+                       </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -592,24 +592,39 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
                     placeholder="Where to?"
                     value={destination}
                     onChange={e => handleInputChange(e.target.value, 'destination')}
-                    onFocus={() => setActiveSearchField('destination')}
+                    onFocus={() => handleInputFocus('destination')}
+                    onBlur={() => setTimeout(() => { if(!activeSearchField) setActiveSearchField(null) }, 200)}
                   />
-                  <button 
-                    onClick={() => triggerManualSearch('destination')}
-                    className="size-12 flex items-center justify-center rounded-2xl bg-accent text-white hover:bg-accent/80 active:scale-90 transition-all shrink-0 shadow-lg shadow-accent/20"
-                    title="Search manual location"
-                  >
+                  <div className="size-12 flex items-center justify-center text-slate-400">
                     <span className="material-symbols-outlined text-[20px]">search</span>
-                  </button>
+                  </div>
                 </div>
-                {activeSearchField === 'destination' && destResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-surface-dark rounded-3xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto no-scrollbar">
-                    {destResults.map(res => (
-                      <button key={res.id} onClick={() => selectResult(res, 'destination')} className="w-full p-4 text-left border-b border-white/5 hover:bg-primary/20 flex flex-col group transition-all">
-                        <span className="text-white font-bold text-sm group-hover:text-accent">{res.display_name}</span>
-                        <span className="text-slate-500 text-[10px] truncate">{res.description}</span>
-                      </button>
-                    ))}
+                {activeSearchField === 'destination' && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-surface-dark rounded-3xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto no-scrollbar animate-slide-up">
+                    {destResults.length > 0 ? (
+                      <>
+                        <div className="px-4 py-2 bg-black/20 text-[10px] font-bold uppercase text-slate-500 tracking-widest">
+                          {destination.length < 2 ? 'Popular Locations' : 'Search Results'}
+                        </div>
+                        {destResults.map(res => (
+                          <button key={res.id} onClick={() => selectResult(res, 'destination')} className="w-full p-4 text-left border-b border-white/5 hover:bg-primary/20 flex items-center gap-3 group transition-all">
+                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400 group-hover:text-accent">
+                              <span className="material-symbols-outlined text-sm">{getCategoryIcon(res.category)}</span>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-white font-bold text-sm group-hover:text-accent">{res.display_name}</span>
+                              <span className="text-slate-500 text-[10px] truncate">{res.description}</span>
+                            </div>
+                            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-slate-500">{res.category}</span>
+                          </button>
+                        ))}
+                      </>
+                    ) : (
+                       <div className="p-6 text-center text-slate-500 text-xs flex flex-col items-center gap-2">
+                         <span className="material-symbols-outlined text-2xl opacity-50">wrong_location</span>
+                         No locations found
+                       </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -631,29 +646,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
                   </button>
                 ))}
               </div>
-
-              {nearbyResults.length > 0 && (
-                <div className="flex flex-col gap-3 mt-1 animate-fade-in">
-                  {nearbyResults.map(place => (
-                    <button 
-                      key={place.id} 
-                      onClick={() => selectNearbyPlace(place)}
-                      className="flex items-center gap-4 bg-input-dark/30 p-4 rounded-2xl border border-white/5 hover:bg-primary/10 transition-all text-left group"
-                    >
-                      <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center text-accent group-hover:bg-accent group-hover:text-white transition-all">
-                        <span className="material-symbols-outlined">explore</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-white truncate">{place.name}</p>
-                        <p className="text-[10px] text-slate-500 truncate">{place.vicinity}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[11px] font-black text-accent">{place.distance}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {aiInsight && !isAiLoading && (
