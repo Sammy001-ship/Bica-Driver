@@ -97,6 +97,13 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
     }, 4000);
   };
 
+  const openNavigation = (coords: [number, number]) => {
+    CapacitorService.triggerHaptic();
+    // Opens Google Maps with direction to the coordinates
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${coords[0]},${coords[1]}`;
+    window.open(url, '_blank');
+  };
+
   const getPhaseText = () => {
     switch(ridePhase) {
       case 'pickup': return "Heading to Pickup";
@@ -306,13 +313,33 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
                     <div className={`w-3 h-3 rounded-sm ${ridePhase === 'trip' ? 'bg-primary animate-pulse' : 'bg-slate-700'}`}></div>
                   </div>
                   <div className="flex-1 flex flex-col gap-4">
-                    <div>
-                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Pick up</p>
-                       <p className="text-sm font-bold text-white truncate">{activeRide.pickup}</p>
+                    <div 
+                      onClick={() => openNavigation(activeRide.coords)} 
+                      className="group cursor-pointer hover:bg-white/5 p-2 -ml-2 rounded-lg transition-colors"
+                      title="Click to navigate"
+                    >
+                       <div className="flex items-center gap-2 mb-1">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Pick up</p>
+                          <span className="material-symbols-outlined text-[14px] text-primary opacity-0 group-hover:opacity-100 transition-opacity">navigation</span>
+                       </div>
+                       <p className="text-sm font-bold text-white truncate flex items-center gap-2">
+                         {activeRide.pickup}
+                         <span className="material-symbols-outlined text-[14px] text-slate-500">open_in_new</span>
+                       </p>
                     </div>
-                    <div>
-                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Drop off</p>
-                       <p className="text-sm font-bold text-white truncate">{activeRide.destination}</p>
+                    <div 
+                      onClick={() => openNavigation(activeRide.destCoords)} 
+                      className="group cursor-pointer hover:bg-white/5 p-2 -ml-2 rounded-lg transition-colors"
+                      title="Click to navigate"
+                    >
+                       <div className="flex items-center gap-2 mb-1">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Drop off</p>
+                          <span className="material-symbols-outlined text-[14px] text-primary opacity-0 group-hover:opacity-100 transition-opacity">navigation</span>
+                       </div>
+                       <p className="text-sm font-bold text-white truncate flex items-center gap-2">
+                         {activeRide.destination}
+                         <span className="material-symbols-outlined text-[14px] text-slate-500">open_in_new</span>
+                       </p>
                     </div>
                   </div>
                 </div>

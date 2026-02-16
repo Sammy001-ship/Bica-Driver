@@ -155,7 +155,42 @@ const App: React.FC = () => {
     ));
   };
 
+  const handleSimulate = (role: UserRole) => {
+    const adminUser: UserProfile = {
+      id: 'admin_preview',
+      name: 'Admin Preview',
+      email: 'admin@bicadrive.app',
+      phone: '+000 000 0000',
+      role: role,
+      rating: 5.0,
+      trips: 0,
+      avatar: role === UserRole.DRIVER ? IMAGES.DRIVER_CARD : IMAGES.USER_AVATAR,
+      approvalStatus: 'APPROVED',
+      backgroundCheckAccepted: true,
+      walletBalance: 500000,
+      carType: 'Admin Vehicle',
+      gender: 'N/A',
+      address: 'Admin HQ',
+      nationality: 'Global',
+      age: '99',
+      transmission: 'Automatic'
+    };
+    
+    setCurrentUser(adminUser);
+    if (role === UserRole.DRIVER) {
+      navigateTo(AppScreen.DRIVER_DASHBOARD);
+    } else {
+      navigateTo(AppScreen.MAIN_REQUEST);
+    }
+  };
+
   const handleLogout = () => {
+    // Check if it's the admin preview user
+    if (currentUser?.id === 'admin_preview') {
+      setCurrentUser(null);
+      navigateTo(AppScreen.ADMIN_DASHBOARD);
+      return;
+    }
     setCurrentUser(null);
     navigateTo(AppScreen.WELCOME);
   };
@@ -189,7 +224,7 @@ const App: React.FC = () => {
           />
         );
       case AppScreen.ADMIN_DASHBOARD:
-        return <AdminDashboardScreen users={allUsers} onUpdateStatus={handleUpdateDriverStatus} onBack={() => navigateTo(AppScreen.WELCOME)} />;
+        return <AdminDashboardScreen users={allUsers} onUpdateStatus={handleUpdateDriverStatus} onBack={() => navigateTo(AppScreen.WELCOME)} onSimulate={handleSimulate} />;
       default:
         return <WelcomeScreen onCreateAccount={handleStart} onLogin={() => navigateTo(AppScreen.LOGIN)} />;
     }

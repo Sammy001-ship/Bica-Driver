@@ -7,6 +7,7 @@ interface AdminDashboardScreenProps {
   users: UserProfile[];
   onUpdateStatus: (userId: string, status: ApprovalStatus) => void;
   onBack: () => void;
+  onSimulate: (role: UserRole) => void;
 }
 
 type AdminSection = 'overview' | 'drivers' | 'owners' | 'trips' | 'finance' | 'settings';
@@ -24,7 +25,7 @@ const MOCK_PAYOUTS = [
   { id: 'p_02', driverId: 'd_55', amount: 12500, status: 'PAID', date: '2023-10-23' },
 ];
 
-const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUpdateStatus, onBack }) => {
+const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUpdateStatus, onBack, onSimulate }) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -51,6 +52,33 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
 
   const renderOverview = () => (
     <div className="space-y-6 animate-slide-up">
+      {/* Simulation Card */}
+      <div className="bg-gradient-to-r from-[#0f172a] to-[#1e293b] p-6 rounded-3xl border border-slate-700 shadow-xl relative overflow-hidden group">
+         <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <span className="material-symbols-outlined text-[100px] text-white">smartphone</span>
+         </div>
+         <div className="relative z-10">
+            <h3 className="text-white font-bold text-lg mb-1">Live App Simulator</h3>
+            <p className="text-slate-400 text-xs mb-4 max-w-[70%]">Access user dashboards directly to verify functionality and user experience.</p>
+            <div className="flex gap-3">
+               <button 
+                 onClick={() => onSimulate(UserRole.DRIVER)}
+                 className="flex items-center gap-2 bg-primary hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide transition-all active:scale-95 shadow-lg shadow-primary/25"
+               >
+                 <span className="material-symbols-outlined text-sm">sports_motorsports</span>
+                 View as Driver
+               </button>
+               <button 
+                 onClick={() => onSimulate(UserRole.OWNER)}
+                 className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide transition-all active:scale-95 border border-white/10"
+               >
+                 <span className="material-symbols-outlined text-sm">directions_car</span>
+                 View as Owner
+               </button>
+            </div>
+         </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-surface-light dark:bg-surface-dark p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="flex items-center gap-2 mb-2">
