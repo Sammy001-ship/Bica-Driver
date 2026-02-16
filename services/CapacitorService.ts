@@ -78,9 +78,7 @@ export const CapacitorService = {
   },
 
   async triggerHaptic() {
-    try {
-      await Haptics.impact({ style: ImpactStyle.Medium });
-    } catch (e) {}
+    // Disabled as per user request to remove sound/feedback on clicks
   },
 
   async initStatusBar() {

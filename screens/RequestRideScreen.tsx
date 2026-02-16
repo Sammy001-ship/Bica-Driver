@@ -1,8 +1,8 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { CapacitorService } from '../services/CapacitorService';
 import { GoogleGenAI } from "@google/genai";
 import InteractiveMap from '../components/InteractiveMap';
+import { IMAGES } from '../constants';
 
 interface SearchResult {
   display_name: string;
@@ -25,6 +25,8 @@ interface RequestRideScreenProps {
   onOpenProfile: () => void;
   onBack: () => void;
 }
+
+type RideState = 'IDLE' | 'SEARCHING' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED';
 
 const DISCOVERY_CATEGORIES = [
   { label: 'Airports', icon: 'flight_takeoff', type: 'airport' },
@@ -85,9 +87,19 @@ const MOCK_LAGOS_PLACES = [
   { id: '33', name: "Jubilee Bridge", vicinity: "Ajah, Lagos", lat: 6.4650, lng: 3.5600, type: 'point_of_interest' }
 ];
 
+const MOCK_ASSIGNED_DRIVER = {
+  name: "James Ola",
+  rating: 4.8,
+  trips: 1520,
+  car: "Toyota Camry 2022",
+  plate: "LND-823-XA",
+  avatar: IMAGES.DRIVER_CARD // Reusing existing image for demo
+};
+
 const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, onBack }) => {
   const [rideType, setRideType] = useState<'now' | 'schedule'>('now');
-  const [isSearching, setIsSearching] = useState(false);
+  const [rideState, setRideState] = useState<RideState>('IDLE');
+  const isSearching = rideState === 'SEARCHING';
   
   const [pickupLocation, setPickupLocation] = useState('Acquiring location...');
   const [pickupCoords, setPickupCoords] = useState<[number, number] | null>(null);
@@ -109,6 +121,10 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
   
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
+
+  // Rating State
+  const [rating, setRating] = useState(0);
+  const [feedbackText, setFeedbackText] = useState('');
 
   const watchIdRef = useRef<number | null>(null);
 
@@ -214,7 +230,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
   };
 
   const triggerManualSearch = (field: 'pickup' | 'destination') => {
-    // Simulates searching by just accepting the input if it matches any mock data or defaulting to a location
     const val = field === 'pickup' ? pickupLocation : destination;
     setIsAiLoading(true);
     
@@ -230,7 +245,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
           lon: matched.lng
         }, field);
       } else {
-        // Fallback random mock location if not found, for demo purposes
         const random = MOCK_LAGOS_PLACES[Math.floor(Math.random() * MOCK_LAGOS_PLACES.length)];
         selectResult({
           display_name: random.name,
@@ -262,11 +276,9 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
   };
 
   const handleMarkerDragEnd = (id: string, newPos: [number, number]) => {
-    // Simulating drag
     CapacitorService.triggerHaptic();
     if (id === 'pickup') {
       setPickupCoords(newPos);
-      // Don't reverse geocode in this mock version
     } else {
       setDestCoords(newPos);
     }
@@ -310,19 +322,178 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
     return `Driver will arrive ${dateObj.toLocaleDateString()} at ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
+  const startRideSimulation = () => {
+    setRideState('SEARCHING');
+    
+    // Simulate flow
+    setTimeout(() => {
+      setRideState('ASSIGNED');
+    }, 2500);
+
+    setTimeout(() => {
+      setRideState('IN_PROGRESS');
+    }, 6000);
+
+    setTimeout(() => {
+      setRideState('COMPLETED');
+    }, 10000);
+  };
+
+  const handleSubmitRating = () => {
+    // In a real app, send rating/feedback to backend here
+    console.log(`Submitted Rating: ${rating}, Feedback: ${feedbackText}`);
+    
+    // Reset Flow
+    setRating(0);
+    setFeedbackText('');
+    setDestination('');
+    setDestCoords(null);
+    setRideState('IDLE');
+    setAiInsight(null);
+  };
+
   const mapMarkers: any[] = [];
   if (userRealTimePos) mapMarkers.push({ id: 'live', position: userRealTimePos, title: 'Live Pulse', icon: 'user' });
-  if (pickupCoords) mapMarkers.push({ id: 'pickup', position: pickupCoords, title: 'Direct Pickup', icon: 'pickup', draggable: true });
-  if (destCoords) mapMarkers.push({ id: 'destination', position: destCoords, title: 'Direct Drop-off', icon: 'destination', draggable: true });
+  if (pickupCoords) mapMarkers.push({ id: 'pickup', position: pickupCoords, title: 'Direct Pickup', icon: 'pickup', draggable: rideState === 'IDLE' });
+  if (destCoords) mapMarkers.push({ id: 'destination', position: destCoords, title: 'Direct Drop-off', icon: 'destination', draggable: rideState === 'IDLE' });
   
-  nearbyResults.forEach(p => {
-    mapMarkers.push({ 
-      id: p.id, 
-      position: [p.location.lat, p.location.lng], 
-      title: p.name, 
-      icon: 'nearby' 
+  if (rideState === 'IDLE') {
+    nearbyResults.forEach(p => {
+      mapMarkers.push({ 
+        id: p.id, 
+        position: [p.location.lat, p.location.lng], 
+        title: p.name, 
+        icon: 'nearby' 
+      });
     });
-  });
+  } else if (rideState === 'ASSIGNED' || rideState === 'IN_PROGRESS') {
+    // Show driver marker simulation could be added here
+    mapMarkers.push({
+      id: 'driver',
+      position: pickupCoords || [6.5, 3.3], // Simulating driver at pickup
+      title: 'Your Chauffeur',
+      icon: 'taxi'
+    });
+  }
+
+  // Overlay for active ride states
+  const renderRideStatusOverlay = () => {
+    if (rideState === 'IDLE' || rideState === 'COMPLETED') return null;
+
+    return (
+      <div className="absolute inset-x-0 bottom-0 z-50 bg-surface-dark rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.8)] border-t border-white/10 p-6 animate-slide-up">
+        {rideState === 'SEARCHING' && (
+          <div className="flex flex-col items-center py-10 gap-4">
+            <div className="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+            <h3 className="text-xl font-bold text-white">Locating Chauffeur...</h3>
+            <p className="text-slate-400 text-sm">Scanning premium network in Lagos</p>
+          </div>
+        )}
+
+        {(rideState === 'ASSIGNED' || rideState === 'IN_PROGRESS') && (
+          <div className="flex flex-col gap-6">
+            <div className="flex items-center justify-between border-b border-white/5 pb-4">
+               <h3 className="text-lg font-bold text-white uppercase tracking-wider">
+                 {rideState === 'ASSIGNED' ? 'Chauffeur En Route' : 'Trip In Progress'}
+               </h3>
+               <span className="bg-primary/20 text-primary px-3 py-1 rounded-full text-xs font-black uppercase animate-pulse">
+                 {rideState === 'ASSIGNED' ? '2 mins away' : 'On Trip'}
+               </span>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <img src={MOCK_ASSIGNED_DRIVER.avatar} className="w-16 h-16 rounded-2xl object-cover ring-2 ring-primary" alt="Driver" />
+              <div className="flex-1">
+                <h4 className="text-xl font-black text-white">{MOCK_ASSIGNED_DRIVER.name}</h4>
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <span className="material-symbols-outlined text-yellow-500 text-sm filled">star</span>
+                  <span>{MOCK_ASSIGNED_DRIVER.rating}</span>
+                  <span>•</span>
+                  <span>{MOCK_ASSIGNED_DRIVER.car}</span>
+                </div>
+              </div>
+              <div className="flex flex-col items-end">
+                <span className="bg-white/10 px-2 py-1 rounded text-xs font-mono text-white mb-1">{MOCK_ASSIGNED_DRIVER.plate}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button className="flex-1 bg-white/5 py-3 rounded-xl flex items-center justify-center gap-2 text-white font-bold hover:bg-white/10 transition-colors">
+                <span className="material-symbols-outlined">call</span> Call
+              </button>
+              <button className="flex-1 bg-white/5 py-3 rounded-xl flex items-center justify-center gap-2 text-white font-bold hover:bg-white/10 transition-colors">
+                <span className="material-symbols-outlined">chat</span> Message
+              </button>
+            </div>
+            
+            {rideState === 'IN_PROGRESS' && (
+              <div className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-center gap-3">
+                 <span className="material-symbols-outlined text-primary">security</span>
+                 <p className="text-xs text-slate-300">Ride is being monitored by Bicadriver Security.</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Feedback Modal
+  const renderFeedbackModal = () => {
+    if (rideState !== 'COMPLETED') return null;
+
+    return (
+      <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
+        <div className="w-full max-w-sm bg-surface-dark border border-white/10 rounded-[2.5rem] p-6 shadow-2xl animate-scale-in relative overflow-hidden">
+          {/* Decorative background blur */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-primary/30 blur-[50px] rounded-full pointer-events-none"></div>
+
+          <div className="relative flex flex-col items-center text-center gap-4 pt-4">
+            <div className="w-20 h-20 rounded-full p-1 bg-gradient-to-tr from-primary to-accent mb-2">
+               <img src={MOCK_ASSIGNED_DRIVER.avatar} className="w-full h-full rounded-full object-cover border-4 border-surface-dark" alt="Driver" />
+            </div>
+            
+            <div>
+              <h2 className="text-2xl font-black text-white">Ride Completed</h2>
+              <p className="text-slate-400 text-sm mt-1">How was your trip with <span className="text-white font-bold">{MOCK_ASSIGNED_DRIVER.name}</span>?</p>
+            </div>
+
+            <div className="flex gap-2 my-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button 
+                  key={star}
+                  onClick={() => setRating(star)}
+                  className="transition-transform active:scale-125 focus:outline-none"
+                >
+                  <span className={`material-symbols-outlined text-4xl ${rating >= star ? 'text-yellow-400 filled' : 'text-slate-600'}`}>
+                    star
+                  </span>
+                </button>
+              ))}
+            </div>
+            
+            <textarea 
+              className="w-full bg-input-dark border border-white/10 rounded-2xl p-4 text-white placeholder-slate-500 text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+              rows={3}
+              placeholder="Write a compliment or complaint..."
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+            />
+
+            <button 
+              onClick={handleSubmitRating}
+              disabled={rating === 0}
+              className={`w-full py-4 rounded-2xl font-black text-base uppercase tracking-widest mt-2 transition-all active:scale-[0.98] ${
+                rating > 0 ? 'bg-primary text-white shadow-lg shadow-primary/25' : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+              }`}
+            >
+              Submit Feedback
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="h-screen w-full overflow-hidden flex flex-col relative bg-background-dark">
@@ -350,178 +521,186 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, on
 
       <div className="flex-1"></div>
 
-      <div className="relative z-30 p-4 flex justify-end">
-        <button 
-          onClick={handleLocateMe}
-          className={`relative bg-white text-primary p-4 rounded-full shadow-2xl active:scale-90 transition-all ${isTrackingLive ? 'ring-4 ring-primary/40' : ''}`}
-        >
-          <span className={`material-symbols-outlined text-2xl ${isTrackingLive ? 'filled' : ''}`}>my_location</span>
-        </button>
-      </div>
+      {rideState === 'IDLE' && (
+        <div className="relative z-30 p-4 flex justify-end">
+          <button 
+            onClick={handleLocateMe}
+            className={`relative bg-white text-primary p-4 rounded-full shadow-2xl active:scale-90 transition-all ${isTrackingLive ? 'ring-4 ring-primary/40' : ''}`}
+          >
+            <span className={`material-symbols-outlined text-2xl ${isTrackingLive ? 'filled' : ''}`}>my_location</span>
+          </button>
+        </div>
+      )}
 
-      <div className="relative z-20 w-full bg-surface-dark rounded-t-[3.5rem] shadow-[0_-30px_80px_rgba(0,0,0,0.9)] border-t border-white/5 flex flex-col max-h-[85vh]">
-        <div className="w-full flex justify-center py-5"><div className="h-1.5 w-16 rounded-full bg-slate-700/40"></div></div>
-        
-        <div className="px-7 pb-12 flex flex-col gap-6 overflow-y-auto no-scrollbar">
-          <div className="flex p-1.5 bg-input-dark rounded-[2.5rem] border border-white/5 shadow-inner">
-            <button onClick={() => setRideType('now')} className={`flex-1 py-4 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.15em] transition-all ${rideType === 'now' ? 'bg-primary text-white shadow-2xl scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}>Ride Now</button>
-            <button onClick={() => setRideType('schedule')} className={`flex-1 py-4 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.15em] transition-all ${rideType === 'schedule' ? 'bg-primary text-white shadow-2xl scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}>Schedule</button>
-          </div>
-
-          {rideType === 'schedule' && (
-            <div className="flex flex-col gap-4 animate-slide-up">
-              <div className="grid grid-cols-2 gap-4">
-                <input type="date" className="bg-input-dark rounded-3xl h-16 border-white/5 text-white font-bold color-scheme-dark px-4" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} />
-                <input type="time" className="bg-input-dark rounded-3xl h-16 border-white/5 text-white font-bold color-scheme-dark px-4" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} />
-              </div>
-              <p className="text-[11px] font-bold text-accent italic text-center">{getFriendlyScheduleText()}</p>
+      {/* Main Request Panel - Only visible when IDLE */}
+      {rideState === 'IDLE' && (
+        <div className="relative z-20 w-full bg-surface-dark rounded-t-[3.5rem] shadow-[0_-30px_80px_rgba(0,0,0,0.9)] border-t border-white/5 flex flex-col max-h-[85vh]">
+          <div className="w-full flex justify-center py-5"><div className="h-1.5 w-16 rounded-full bg-slate-700/40"></div></div>
+          
+          <div className="px-7 pb-12 flex flex-col gap-6 overflow-y-auto no-scrollbar">
+            <div className="flex p-1.5 bg-input-dark rounded-[2.5rem] border border-white/5 shadow-inner">
+              <button onClick={() => setRideType('now')} className={`flex-1 py-4 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.15em] transition-all ${rideType === 'now' ? 'bg-primary text-white shadow-2xl scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}>Ride Now</button>
+              <button onClick={() => setRideType('schedule')} className={`flex-1 py-4 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.15em] transition-all ${rideType === 'schedule' ? 'bg-primary text-white shadow-2xl scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}>Schedule</button>
             </div>
-          )}
 
-          <div className="flex flex-col gap-6">
-            <div className="relative">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Pickup</label>
-              <div className="flex items-center bg-input-dark rounded-[1.75rem] border border-white/5 shadow-xl transition-all focus-within:ring-2 focus-within:ring-primary/40 pr-2">
-                <input 
-                  className="w-full bg-transparent px-5 h-16 border-none text-white font-bold focus:ring-0 placeholder-slate-700"
-                  placeholder="Where from?"
-                  value={pickupLocation}
-                  onChange={e => handleInputChange(e.target.value, 'pickup')}
-                  onFocus={() => setActiveSearchField('pickup')}
-                />
-                <button 
-                  onClick={() => triggerManualSearch('pickup')}
-                  className="size-12 flex items-center justify-center rounded-2xl bg-accent text-white hover:bg-accent/80 active:scale-90 transition-all shrink-0 shadow-lg shadow-accent/20"
-                  title="Search manual location"
-                >
-                  <span className="material-symbols-outlined text-[20px]">search</span>
-                </button>
-              </div>
-              {activeSearchField === 'pickup' && pickupResults.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-surface-dark rounded-3xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto no-scrollbar">
-                  {pickupResults.map(res => (
-                    <button key={res.id} onClick={() => selectResult(res, 'pickup')} className="w-full p-4 text-left border-b border-white/5 hover:bg-primary/20 flex flex-col group transition-all">
-                      <span className="text-white font-bold text-sm group-hover:text-accent">{res.display_name}</span>
-                      <span className="text-slate-500 text-[10px] truncate">{res.description}</span>
-                    </button>
-                  ))}
+            {rideType === 'schedule' && (
+              <div className="flex flex-col gap-4 animate-slide-up">
+                <div className="grid grid-cols-2 gap-4">
+                  <input type="date" className="bg-input-dark rounded-3xl h-16 border-white/5 text-white font-bold color-scheme-dark px-4" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} />
+                  <input type="time" className="bg-input-dark rounded-3xl h-16 border-white/5 text-white font-bold color-scheme-dark px-4" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} />
                 </div>
-              )}
-            </div>
-
-            <div className="relative">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Destination</label>
-              <div className="flex items-center bg-input-dark rounded-[1.75rem] border border-white/5 shadow-xl transition-all focus-within:ring-2 focus-within:ring-primary/40 pr-2">
-                <input 
-                  className="w-full bg-transparent px-5 h-16 border-none text-white font-bold focus:ring-0 placeholder-slate-700"
-                  placeholder="Where to?"
-                  value={destination}
-                  onChange={e => handleInputChange(e.target.value, 'destination')}
-                  onFocus={() => setActiveSearchField('destination')}
-                />
-                <button 
-                  onClick={() => triggerManualSearch('destination')}
-                  className="size-12 flex items-center justify-center rounded-2xl bg-accent text-white hover:bg-accent/80 active:scale-90 transition-all shrink-0 shadow-lg shadow-accent/20"
-                  title="Search manual location"
-                >
-                  <span className="material-symbols-outlined text-[20px]">search</span>
-                </button>
+                <p className="text-[11px] font-bold text-accent italic text-center">{getFriendlyScheduleText()}</p>
               </div>
-              {activeSearchField === 'destination' && destResults.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-surface-dark rounded-3xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto no-scrollbar">
-                  {destResults.map(res => (
-                    <button key={res.id} onClick={() => selectResult(res, 'destination')} className="w-full p-4 text-left border-b border-white/5 hover:bg-primary/20 flex flex-col group transition-all">
-                      <span className="text-white font-bold text-sm group-hover:text-accent">{res.display_name}</span>
-                      <span className="text-slate-500 text-[10px] truncate">{res.description}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+            )}
 
-          <div className="flex flex-col gap-4">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Live Discovery</span>
-            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
-              {DISCOVERY_CATEGORIES.map((cat, i) => (
-                <button 
-                  key={i} 
-                  onClick={() => handleCategorySelect(cat.type)} 
-                  className={`flex items-center gap-2 px-5 py-3 rounded-2xl transition-all shrink-0 border ${
-                    activeCategory === cat.type ? 'bg-accent/20 border-accent/50 text-accent' : 'bg-input-dark/60 border-white/5 text-slate-300'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-sm">{cat.icon}</span>
-                  <span className="text-[11px] font-black uppercase">{cat.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {nearbyResults.length > 0 && (
-              <div className="flex flex-col gap-3 mt-1 animate-fade-in">
-                {nearbyResults.map(place => (
+            <div className="flex flex-col gap-6">
+              <div className="relative">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Pickup</label>
+                <div className="flex items-center bg-input-dark rounded-[1.75rem] border border-white/5 shadow-xl transition-all focus-within:ring-2 focus-within:ring-primary/40 pr-2">
+                  <input 
+                    className="w-full bg-transparent px-5 h-16 border-none text-white font-bold focus:ring-0 placeholder-slate-700"
+                    placeholder="Where from?"
+                    value={pickupLocation}
+                    onChange={e => handleInputChange(e.target.value, 'pickup')}
+                    onFocus={() => setActiveSearchField('pickup')}
+                  />
                   <button 
-                    key={place.id} 
-                    onClick={() => selectNearbyPlace(place)}
-                    className="flex items-center gap-4 bg-input-dark/30 p-4 rounded-2xl border border-white/5 hover:bg-primary/10 transition-all text-left group"
+                    onClick={() => triggerManualSearch('pickup')}
+                    className="size-12 flex items-center justify-center rounded-2xl bg-accent text-white hover:bg-accent/80 active:scale-90 transition-all shrink-0 shadow-lg shadow-accent/20"
+                    title="Search manual location"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center text-accent group-hover:bg-accent group-hover:text-white transition-all">
-                      <span className="material-symbols-outlined">explore</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-white truncate">{place.name}</p>
-                      <p className="text-[10px] text-slate-500 truncate">{place.vicinity}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[11px] font-black text-accent">{place.distance}</p>
-                    </div>
+                    <span className="material-symbols-outlined text-[20px]">search</span>
+                  </button>
+                </div>
+                {activeSearchField === 'pickup' && pickupResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-surface-dark rounded-3xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto no-scrollbar">
+                    {pickupResults.map(res => (
+                      <button key={res.id} onClick={() => selectResult(res, 'pickup')} className="w-full p-4 text-left border-b border-white/5 hover:bg-primary/20 flex flex-col group transition-all">
+                        <span className="text-white font-bold text-sm group-hover:text-accent">{res.display_name}</span>
+                        <span className="text-slate-500 text-[10px] truncate">{res.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="relative">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Destination</label>
+                <div className="flex items-center bg-input-dark rounded-[1.75rem] border border-white/5 shadow-xl transition-all focus-within:ring-2 focus-within:ring-primary/40 pr-2">
+                  <input 
+                    className="w-full bg-transparent px-5 h-16 border-none text-white font-bold focus:ring-0 placeholder-slate-700"
+                    placeholder="Where to?"
+                    value={destination}
+                    onChange={e => handleInputChange(e.target.value, 'destination')}
+                    onFocus={() => setActiveSearchField('destination')}
+                  />
+                  <button 
+                    onClick={() => triggerManualSearch('destination')}
+                    className="size-12 flex items-center justify-center rounded-2xl bg-accent text-white hover:bg-accent/80 active:scale-90 transition-all shrink-0 shadow-lg shadow-accent/20"
+                    title="Search manual location"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">search</span>
+                  </button>
+                </div>
+                {activeSearchField === 'destination' && destResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-surface-dark rounded-3xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto no-scrollbar">
+                    {destResults.map(res => (
+                      <button key={res.id} onClick={() => selectResult(res, 'destination')} className="w-full p-4 text-left border-b border-white/5 hover:bg-primary/20 flex flex-col group transition-all">
+                        <span className="text-white font-bold text-sm group-hover:text-accent">{res.display_name}</span>
+                        <span className="text-slate-500 text-[10px] truncate">{res.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Live Discovery</span>
+              <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+                {DISCOVERY_CATEGORIES.map((cat, i) => (
+                  <button 
+                    key={i} 
+                    onClick={() => handleCategorySelect(cat.type)} 
+                    className={`flex items-center gap-2 px-5 py-3 rounded-2xl transition-all shrink-0 border ${
+                      activeCategory === cat.type ? 'bg-accent/20 border-accent/50 text-accent' : 'bg-input-dark/60 border-white/5 text-slate-300'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-sm">{cat.icon}</span>
+                    <span className="text-[11px] font-black uppercase">{cat.label}</span>
                   </button>
                 ))}
               </div>
-            )}
-          </div>
 
-          {aiInsight && !isAiLoading && (
-            <div className="bg-primary/10 border border-primary/30 rounded-3xl p-5 flex gap-4 shadow-xl">
-              <div className="shrink-0 p-2 bg-primary/20 rounded-xl h-fit">
-                <span className="material-symbols-outlined text-accent text-2xl filled">auto_awesome</span>
-              </div>
-              <p className="text-[12px] text-slate-300 font-bold italic leading-relaxed">{aiInsight}</p>
-            </div>
-          )}
-
-          <div className="mt-6 flex flex-col gap-8">
-            <div className="flex items-center justify-between px-3">
-              <div className="flex flex-col">
-                <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">Elite Estimate</span>
-                <span className="text-[34px] font-black text-white tracking-tighter">₦15,000</span>
-              </div>
-              <div className="bg-input-dark/80 px-6 py-4 rounded-3xl border border-white/10 shadow-lg">
-                <span className="text-[11px] font-black text-slate-300 uppercase tracking-widest">VISA • 4288</span>
-              </div>
-            </div>
-            
-            <button 
-              onClick={() => {
-                CapacitorService.triggerHaptic();
-                setIsSearching(true);
-                setTimeout(() => { setIsSearching(false); alert("Professional Chauffeur request submitted via Bicadriver Intel."); }, 1500);
-              }}
-              disabled={!isFormValid() || isSearching}
-              className={`w-full h-20 rounded-[2.25rem] font-black text-[17px] uppercase tracking-widest flex items-center justify-center gap-4 transition-all active:scale-[0.97] shadow-2xl ${
-                isFormValid() ? 'bg-primary text-white hover:brightness-110 shadow-primary/40' : 'bg-slate-800 text-slate-600 opacity-50'
-              }`}
-            >
-              {isSearching ? <span className="material-symbols-outlined animate-spin">progress_activity</span> : (
-                <>
-                  <span>{rideType === 'now' ? 'Request Chauffeur' : 'Confirm Schedule'}</span>
-                  <span className="material-symbols-outlined text-3xl">trending_flat</span>
-                </>
+              {nearbyResults.length > 0 && (
+                <div className="flex flex-col gap-3 mt-1 animate-fade-in">
+                  {nearbyResults.map(place => (
+                    <button 
+                      key={place.id} 
+                      onClick={() => selectNearbyPlace(place)}
+                      className="flex items-center gap-4 bg-input-dark/30 p-4 rounded-2xl border border-white/5 hover:bg-primary/10 transition-all text-left group"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center text-accent group-hover:bg-accent group-hover:text-white transition-all">
+                        <span className="material-symbols-outlined">explore</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-white truncate">{place.name}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{place.vicinity}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[11px] font-black text-accent">{place.distance}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               )}
-            </button>
+            </div>
+
+            {aiInsight && !isAiLoading && (
+              <div className="bg-primary/10 border border-primary/30 rounded-3xl p-5 flex gap-4 shadow-xl">
+                <div className="shrink-0 p-2 bg-primary/20 rounded-xl h-fit">
+                  <span className="material-symbols-outlined text-accent text-2xl filled">auto_awesome</span>
+                </div>
+                <p className="text-[12px] text-slate-300 font-bold italic leading-relaxed">{aiInsight}</p>
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-col gap-8">
+              <div className="flex items-center justify-between px-3">
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">Elite Estimate</span>
+                  <span className="text-[34px] font-black text-white tracking-tighter">₦15,000</span>
+                </div>
+                <div className="bg-input-dark/80 px-6 py-4 rounded-3xl border border-white/10 shadow-lg">
+                  <span className="text-[11px] font-black text-slate-300 uppercase tracking-widest">VISA • 4288</span>
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => {
+                  CapacitorService.triggerHaptic();
+                  startRideSimulation();
+                }}
+                disabled={!isFormValid() || isSearching}
+                className={`w-full h-20 rounded-[2.25rem] font-black text-[17px] uppercase tracking-widest flex items-center justify-center gap-4 transition-all active:scale-[0.97] shadow-2xl ${
+                  isFormValid() ? 'bg-primary text-white hover:brightness-110 shadow-primary/40' : 'bg-slate-800 text-slate-600 opacity-50'
+                }`}
+              >
+                {isSearching ? <span className="material-symbols-outlined animate-spin">progress_activity</span> : (
+                  <>
+                    <span>{rideType === 'now' ? 'Request Chauffeur' : 'Confirm Schedule'}</span>
+                    <span className="material-symbols-outlined text-3xl">trending_flat</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {renderRideStatusOverlay()}
+      {renderFeedbackModal()}
+
     </div>
   );
 };
