@@ -1,10 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { CapacitorService } from '../services/CapacitorService';
-import { Config } from '../services/Config';
-import { GoogleGenAI } from "@google/genai";
 import InteractiveMap from '../components/InteractiveMap';
 import { IMAGES } from '../constants';
+import { SystemSettings, Trip, UserProfile } from '../types';
 
 interface SearchResult {
   id: string;
@@ -18,681 +17,456 @@ interface SearchResult {
 interface RequestRideScreenProps {
   onOpenProfile: () => void;
   onBack: () => void;
+  settings: SystemSettings;
+  onRideComplete: (trip: Trip) => void;
+  currentUser: UserProfile | null;
 }
 
 type RideState = 'IDLE' | 'SEARCHING' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED';
 
 const DISCOVERY_CATEGORIES = [
-  { label: 'Airports', icon: 'flight_takeoff', type: 'airport' },
-  { label: 'Hotels', icon: 'hotel', type: 'lodging' },
-  { label: 'Dining', icon: 'restaurant', type: 'restaurant' },
-  { label: 'Malls', icon: 'shopping_cart', type: 'shopping_mall' }
+  { label: 'Airports', icon: 'flight_takeoff', type: 'Airport' },
+  { label: 'Hotels', icon: 'hotel', type: 'Hotel' },
+  { label: 'Dining', icon: 'restaurant', type: 'Commercial' },
+  { label: 'Malls', icon: 'shopping_cart', type: 'Shopping' }
 ];
 
-// Comprehensive Lagos Database with all 20 LGAs alphabetically
+// Comprehensive Lagos Database
 const LAGOS_LOCATIONS: SearchResult[] = [
-  // Airports & Transport
-  { id: 'lm_mmia', display_name: 'Murtala Muhammed Int. Airport (MMIA)', description: 'Ikeja, Lagos', lat: 6.5774, lon: 3.3210, category: 'Airport' },
+  { id: 'lm_mmia', display_name: 'Murtala Muhammed Int. Airport', description: 'Ikeja, Lagos', lat: 6.5774, lon: 3.3210, category: 'Airport' },
   { id: 'lm_mma2', display_name: 'MMA2 Terminal', description: 'Ikeja, Lagos', lat: 6.5732, lon: 3.3338, category: 'Airport' },
-  { id: 'lm_gigu', display_name: 'GIGM Jibowu Terminal', description: 'Yaba, Lagos', lat: 6.5255, lon: 3.3688, category: 'Transport' },
-  
-  // Lagos State LGAs (Alphabetical)
-  { id: 'lga_agege', display_name: 'Agege', description: 'Lagos State LGA', lat: 6.6180, lon: 3.3209, category: 'LGA' },
-  { id: 'lga_ajeromi', display_name: 'Ajeromi-Ifelodun', description: 'Lagos State LGA', lat: 6.4555, lon: 3.3339, category: 'LGA' },
-  { id: 'lga_alimosho', display_name: 'Alimosho', description: 'Lagos State LGA', lat: 6.6094, lon: 3.2963, category: 'LGA' },
-  { id: 'lga_amuwo', display_name: 'Amuwo-Odofin', description: 'Lagos State LGA', lat: 6.4667, lon: 3.2833, category: 'LGA' },
-  { id: 'lga_apapa', display_name: 'Apapa', description: 'Lagos State LGA', lat: 6.4553, lon: 3.3641, category: 'LGA' },
-  { id: 'lga_badagry', display_name: 'Badagry', description: 'Lagos State LGA', lat: 6.4316, lon: 2.8876, category: 'LGA' },
-  { id: 'lga_epe', display_name: 'Epe', description: 'Lagos State LGA', lat: 6.5841, lon: 3.9754, category: 'LGA' },
-  { id: 'lga_etiosa', display_name: 'Eti-Osa', description: 'Lagos State LGA', lat: 6.4478, lon: 3.4737, category: 'LGA' },
-  { id: 'lga_ibeju', display_name: 'Ibeju-Lekki', description: 'Lagos State LGA', lat: 6.4667, lon: 3.6667, category: 'LGA' },
-  { id: 'lga_ifako', display_name: 'Ifako-Ijaiye', description: 'Lagos State LGA', lat: 6.6575, lon: 3.3179, category: 'LGA' },
+  { id: 'lm_civic', display_name: 'The Civic Centre', description: 'Victoria Island, Lagos', lat: 6.4368, lon: 3.4413, category: 'Tourism' },
+  { id: 'lm_eko_hotel', display_name: 'Eko Hotels & Suites', description: 'Victoria Island, Lagos', lat: 6.4267, lon: 3.4301, category: 'Hotel' },
+  { id: 'lm_ikeja_mall', display_name: 'Ikeja City Mall', description: 'Alausa, Ikeja', lat: 6.6136, lon: 3.3578, category: 'Shopping' },
+  { id: 'lm_palms', display_name: 'The Palms Shopping Mall', description: 'Lekki, Lagos', lat: 6.4339, lon: 3.4456, category: 'Shopping' },
+  { id: 'lm_landmark', display_name: 'Landmark Beach', description: 'Victoria Island, Lagos', lat: 6.4217, lon: 3.4468, category: 'Tourism' },
   { id: 'lga_ikeja', display_name: 'Ikeja', description: 'State Capital & LGA', lat: 6.6018, lon: 3.3515, category: 'LGA' },
-  { id: 'lga_ikorodu', display_name: 'Ikorodu', description: 'Lagos State LGA', lat: 6.6191, lon: 3.5041, category: 'LGA' },
-  { id: 'lga_kosofe', display_name: 'Kosofe', description: 'Lagos State LGA', lat: 6.5744, lon: 3.3853, category: 'LGA' },
-  { id: 'lga_lagos_island', display_name: 'Lagos Island', description: 'Lagos State LGA', lat: 6.4549, lon: 3.4246, category: 'LGA' },
-  { id: 'lga_lagos_mainland', display_name: 'Lagos Mainland', description: 'Lagos State LGA', lat: 6.5059, lon: 3.3764, category: 'LGA' },
-  { id: 'lga_mushin', display_name: 'Mushin', description: 'Lagos State LGA', lat: 6.5273, lon: 3.3552, category: 'LGA' },
-  { id: 'lga_ojo', display_name: 'Ojo', description: 'Lagos State LGA', lat: 6.4633, lon: 3.1678, category: 'LGA' },
-  { id: 'lga_oshodi', display_name: 'Oshodi-Isolo', description: 'Lagos State LGA', lat: 6.5539, lon: 3.3364, category: 'LGA' },
-  { id: 'lga_shomolu', display_name: 'Shomolu', description: 'Lagos State LGA', lat: 6.5392, lon: 3.3842, category: 'LGA' },
-  { id: 'lga_surulere', display_name: 'Surulere', description: 'Lagos State LGA', lat: 6.4972, lon: 3.3542, category: 'LGA' },
-  
-  // Popular Districts & Landmarks
-  { id: 'lm_lekki1', display_name: 'Lekki Phase 1', description: 'Eti-Osa', lat: 6.4478, lon: 3.4737, category: 'District' },
-  { id: 'lm_vi', display_name: 'Victoria Island', description: 'Business District', lat: 6.4253, lon: 3.4308, category: 'District' },
-  { id: 'lm_ikoyi', display_name: 'Ikoyi', description: 'Luxury District', lat: 6.4549, lon: 3.4246, category: 'District' },
-  { id: 'lm_yaba', display_name: 'Yaba', description: 'Tech & Education Hub', lat: 6.5165, lon: 3.3853, category: 'District' },
-  { id: 'lm_ajah', display_name: 'Ajah', description: 'Eti-Osa', lat: 6.4698, lon: 3.5852, category: 'District' },
-  { id: 'lm_maryland', display_name: 'Maryland', description: 'Kosofe', lat: 6.5744, lon: 3.3653, category: 'District' },
-  { id: 'lm_festac', display_name: 'Festac Town', description: 'Amuwo-Odofin', lat: 6.4667, lon: 3.2833, category: 'District' },
-
-  // Landmarks & Commercial
-  { id: 'lm_landmark', display_name: 'Landmark Beach', description: 'Water Corporation Dr, VI', lat: 6.4227, lon: 3.4437, category: 'Tourism' },
-  { id: 'lm_icm', display_name: 'Ikeja City Mall', description: 'Alausa, Ikeja', lat: 6.6142, lon: 3.3581, category: 'Shopping' },
-  { id: 'lm_palms', display_name: 'The Palms Shopping Mall', description: 'Lekki', lat: 6.4357, lon: 3.4418, category: 'Shopping' },
-  { id: 'lm_eko_hotel', display_name: 'Eko Hotels & Suites', description: 'Adetokunbo Ademola, VI', lat: 6.4267, lon: 3.4301, category: 'Hotel' },
-  { id: 'lm_civic', display_name: 'The Civic Centre', description: 'Ozumba Mbadiwe, VI', lat: 6.4316, lon: 3.4116, category: 'Commercial' },
-  { id: 'lm_unilag', display_name: 'University of Lagos', description: 'Akoka, Yaba', lat: 6.5165, lon: 3.3964, category: 'Education' },
-  { id: 'lm_banana', display_name: 'Banana Island', description: 'Ikoyi', lat: 6.4563, lon: 3.4503, category: 'Residential' },
-  { id: 'lm_vgc', display_name: 'Victoria Garden City (VGC)', description: 'Lekki-Epe Expressway', lat: 6.4674, lon: 3.5612, category: 'Residential' },
-  { id: 'lm_magodo', display_name: 'Magodo Phase 2', description: 'Shangisha', lat: 6.6080, lon: 3.3850, category: 'Residential' },
-  { id: 'lm_allen', display_name: 'Allen Avenue', description: 'Ikeja', lat: 6.5985, lon: 3.3533, category: 'Commercial' },
-  { id: 'lm_comp_village', display_name: 'Computer Village', description: 'Otigba St, Ikeja', lat: 6.5965, lon: 3.3421, category: 'Commercial' },
-  { id: 'lm_national_theatre', display_name: 'National Arts Theatre', description: 'Iganmu', lat: 6.4789, lon: 3.3688, category: 'Tourism' },
-  { id: 'lm_lufasi', display_name: 'Lufasi Nature Park', description: 'Lekki-Epe Expy', lat: 6.4833, lon: 3.6167, category: 'Tourism' },
-  { id: 'lm_nike', display_name: 'Nike Art Gallery', description: 'Lekki Phase 1', lat: 6.4446, lon: 3.4864, category: 'Tourism' }
+  { id: 'lga_lekki', display_name: 'Lekki Phase 1', description: 'Eti-Osa, Lagos', lat: 6.4478, lon: 3.4737, category: 'Residential' },
+  { id: 'lga_vi', display_name: 'Victoria Island', description: 'Eti-Osa, Lagos', lat: 6.4281, lon: 3.4219, category: 'Commercial' },
+  { id: 'lga_ikoyi', display_name: 'Ikoyi', description: 'Lagos', lat: 6.4549, lon: 3.4246, category: 'Residential' },
+  { id: 'lga_surulere', display_name: 'Surulere', description: 'Lagos Mainland', lat: 6.4975, lon: 3.3653, category: 'LGA' },
+  { id: 'lga_yaba', display_name: 'Yaba', description: 'Lagos Mainland', lat: 6.5163, lon: 3.3768, category: 'Education' },
 ];
 
-const MOCK_ASSIGNED_DRIVER = {
-  name: "James Ola",
-  rating: 4.8,
-  trips: 1520,
-  car: "Toyota Camry 2022",
-  plate: "LND-823-XA",
-  avatar: IMAGES.DRIVER_CARD
-};
-
-const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ onOpenProfile, onBack }) => {
-  const [rideType, setRideType] = useState<'now' | 'schedule'>('now');
+const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ 
+  onOpenProfile, 
+  onBack, 
+  settings, 
+  onRideComplete,
+  currentUser
+}) => {
+  const [pickup, setPickup] = useState<SearchResult | null>(null);
+  const [destination, setDestination] = useState<SearchResult | null>(null);
   const [rideState, setRideState] = useState<RideState>('IDLE');
-  const isSearching = rideState === 'SEARCHING';
+  const [mapCenter, setMapCenter] = useState<[number, number]>([6.4549, 3.4246]); // Lagos default
+  const [estimatedPrice, setEstimatedPrice] = useState<number>(0);
+  const [estimatedDistance, setEstimatedDistance] = useState<string>('');
   
-  const [pickupLocation, setPickupLocation] = useState('Acquiring location...');
-  const [pickupCoords, setPickupCoords] = useState<[number, number] | null>(null);
-  const [pickupResults, setPickupResults] = useState<SearchResult[]>([]);
-  const [isTrackingLive, setIsTrackingLive] = useState(true);
-  
-  const [destination, setDestination] = useState('');
-  const [destCoords, setDestCoords] = useState<[number, number] | null>(null);
-  const [destResults, setDestResults] = useState<SearchResult[]>([]);
-  
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  
-  const [activeSearchField, setActiveSearchField] = useState<'pickup' | 'destination' | null>(null);
-  const [aiInsight, setAiInsight] = useState<string | null>(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([6.5244, 3.3792]);
-  const [userRealTimePos, setUserRealTimePos] = useState<[number, number] | null>(null);
-  
-  const [scheduledDate, setScheduledDate] = useState('');
-  const [scheduledTime, setScheduledTime] = useState('');
+  // Search States
+  const [isSearchingPickup, setIsSearchingPickup] = useState(false);
+  const [isSearchingDest, setIsSearchingDest] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Rating State
-  const [rating, setRating] = useState(0);
-  const [feedbackText, setFeedbackText] = useState('');
-
-  const watchIdRef = useRef<number | null>(null);
+  // Simulation State
+  const [driverInfo, setDriverInfo] = useState<any>(null);
 
   useEffect(() => {
-    const initLocation = async () => {
-      const pos = await CapacitorService.getCurrentLocation();
+    // Get initial location
+    CapacitorService.getCurrentLocation().then(pos => {
       if (pos) {
-        const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-        setUserRealTimePos(coords);
-        setPickupCoords(coords);
-        setMapCenter(coords);
-        setPickupLocation("Current Location");
-      } else {
-        // Fallback to Lagos center (Ikeja/Mainland)
-        const fallback: [number, number] = [6.5244, 3.3792]; 
-        setUserRealTimePos(fallback);
-        setPickupCoords(fallback);
-        setMapCenter(fallback);
-        setPickupLocation("Lagos, Nigeria");
+        setMapCenter([pos.coords.latitude, pos.coords.longitude]);
       }
-
-      if ("geolocation" in navigator) {
-        watchIdRef.current = navigator.geolocation.watchPosition((p) => {
-          const c: [number, number] = [p.coords.latitude, p.coords.longitude];
-          setUserRealTimePos(c);
-          if (isTrackingLive) {
-            setPickupCoords(c);
-            setMapCenter(c);
-          }
-        }, (error) => {
-          console.warn("Watch position error:", error);
-        }, { enableHighAccuracy: true });
-      }
-    };
-
-    initLocation();
-
-    return () => {
-      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
-    };
+    });
   }, []);
 
-  // Updated Search Logic using local database
-  const searchLocations = (query: string, field: 'pickup' | 'destination') => {
-    if (!query) {
-      // Show prioritized list: Popular Airports + LGAs
-      const popular = LAGOS_LOCATIONS.filter(l => 
-        l.category === 'Airport' || l.category === 'LGA' || l.display_name.includes('VI') || l.display_name.includes('Lekki')
-      );
-      // Sort so LGAs are alphabetical, but keep Airports at top
-      const sorted = popular.sort((a, b) => {
-         if (a.category === 'Airport' && b.category !== 'Airport') return -1;
-         if (a.category !== 'Airport' && b.category === 'Airport') return 1;
-         return a.display_name.localeCompare(b.display_name);
-      });
+  // Calculate Price when points change
+  useEffect(() => {
+    if (pickup && destination) {
+      // Simple Haversine distance approximation for demo
+      const R = 6371; // Radius of the earth in km
+      const dLat = deg2rad(destination.lat - pickup.lat);
+      const dLon = deg2rad(destination.lon - pickup.lon);
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(deg2rad(pickup.lat)) * Math.cos(deg2rad(destination.lat)) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2); 
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+      const d = R * c; // Distance in km
       
-      if (field === 'pickup') setPickupResults(sorted);
-      else setDestResults(sorted);
-      return;
+      const dist = Math.max(d, 1); // Minimum 1km
+      setEstimatedDistance(dist.toFixed(1));
+      
+      // Calculate Price based on Admin Settings
+      const price = settings.baseFare + (dist * settings.pricePerKm);
+      setEstimatedPrice(Math.round(price / 50) * 50); // Round to nearest 50
     }
+  }, [pickup, destination, settings]);
 
-    const lowerQuery = query.toLowerCase();
-    const filtered = LAGOS_LOCATIONS.filter(loc => 
-      loc.display_name.toLowerCase().includes(lowerQuery) || 
-      loc.description.toLowerCase().includes(lowerQuery) ||
-      loc.category.toLowerCase().includes(lowerQuery)
-    ).sort((a, b) => a.display_name.localeCompare(b.display_name));
-
-    if (field === 'pickup') setPickupResults(filtered);
-    else setDestResults(filtered);
-  };
-
-  const handleInputChange = (val: string, field: 'pickup' | 'destination') => {
-    if (field === 'pickup') {
-      setPickupLocation(val);
-      setIsTrackingLive(false);
-    } else {
-      setDestination(val);
-    }
-    setActiveSearchField(field);
-    searchLocations(val, field);
-  };
-
-  const handleInputFocus = (field: 'pickup' | 'destination') => {
-    setActiveSearchField(field);
-    const currentVal = field === 'pickup' ? pickupLocation : destination;
-    
-    // If empty or default text, show instant popular locations
-    if (!currentVal || currentVal === 'Acquiring location...' || currentVal === 'Current Location' || currentVal === 'Lagos, Nigeria') {
-      // Show priority locations immediately
-      searchLocations("", field);
-    } else {
-      searchLocations(currentVal, field);
-    }
-  };
-
-  const selectResult = (res: SearchResult, field: 'pickup' | 'destination') => {
-    const coords: [number, number] = [res.lat, res.lon];
-    
-    if (field === 'pickup') {
-      setPickupLocation(res.display_name);
-      setPickupCoords(coords);
-      setPickupResults([]);
-    } else {
-      setDestination(res.display_name);
-      setDestCoords(coords);
-      setDestResults([]);
-    }
-    
-    setMapCenter(coords);
-    setActiveSearchField(null);
-    CapacitorService.triggerHaptic();
-    
-    generateAiInsight(res.display_name);
-  };
-
-  const generateAiInsight = async (locationName: string) => {
-    if (!Config.apiKey) return;
-    setIsAiLoading(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: Config.apiKey });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Provide a short, 1-sentence elite travel tip or safety status for a premium chauffeur service heading to: ${locationName} in Lagos, Nigeria. Keep it professional, concise and luxury-focused.`,
-      });
-      setAiInsight(response.text || "Direct route optimized for safety.");
-    } catch (e) {
-      setAiInsight("Premium route calculated.");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  const handleMarkerDragEnd = (id: string, newPos: [number, number]) => {
-    CapacitorService.triggerHaptic();
-    if (id === 'pickup') {
-      setPickupCoords(newPos);
-      setPickupLocation("Pinned Location");
-    } else {
-      setDestCoords(newPos);
-      setDestination("Pinned Location");
-    }
-  };
-
-  const handleLocateMe = async () => {
-    CapacitorService.triggerHaptic();
-    setIsTrackingLive(true);
-    if (userRealTimePos) {
-      setMapCenter(userRealTimePos);
-      setPickupCoords(userRealTimePos);
-      setPickupLocation("Current Location");
-    } else {
-      // Refresh location if null
-      const pos = await CapacitorService.getCurrentLocation();
-      if (pos) {
-        const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-        setUserRealTimePos(coords);
-        setMapCenter(coords);
-        setPickupCoords(coords);
-        setPickupLocation("Current Location");
-      }
-    }
-  };
-
-  const handleCategorySelect = (categoryType: string) => {
-    CapacitorService.triggerHaptic();
-    setActiveCategory(categoryType);
-    // Move map to a relevant location for category (Simulated)
-    if (categoryType === 'airport') setMapCenter([6.5774, 3.3210]); // MMIA
-    if (categoryType === 'lodging') setMapCenter([6.4267, 3.4301]); // Eko Hotel
-    if (categoryType === 'shopping_mall') setMapCenter([6.4357, 3.4418]); // Palms
-  };
-
-  const isFormValid = () => {
-    if (rideType === 'now') return !!destCoords;
-    return !!destCoords && !!scheduledDate && !!scheduledTime;
-  };
-
-  const getFriendlyScheduleText = () => {
-    if (!scheduledDate || !scheduledTime) return "Select preferred arrival window";
-    const dateObj = new Date(`${scheduledDate}T${scheduledTime}`);
-    return `Driver will arrive ${dateObj.toLocaleDateString()} at ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  };
-
-  const startRideSimulation = () => {
-    setRideState('SEARCHING');
-    
-    // Simulate flow
-    setTimeout(() => {
-      setRideState('ASSIGNED');
-    }, 2500);
-
-    setTimeout(() => {
-      setRideState('IN_PROGRESS');
-    }, 6000);
-
-    setTimeout(() => {
-      setRideState('COMPLETED');
-    }, 10000);
-  };
-
-  const handleSubmitRating = () => {
-    console.log(`Submitted Rating: ${rating}, Feedback: ${feedbackText}`);
-    setRating(0);
-    setFeedbackText('');
-    setDestination('');
-    setDestCoords(null);
-    setRideState('IDLE');
-    setAiInsight(null);
-  };
-
-  const mapMarkers: any[] = [];
-  if (userRealTimePos) mapMarkers.push({ id: 'live', position: userRealTimePos, title: 'Live Pulse', icon: 'user' });
-  if (pickupCoords) mapMarkers.push({ id: 'pickup', position: pickupCoords, title: 'Direct Pickup', icon: 'pickup', draggable: rideState === 'IDLE' });
-  if (destCoords) mapMarkers.push({ id: 'destination', position: destCoords, title: 'Direct Drop-off', icon: 'destination', draggable: rideState === 'IDLE' });
-  
-  if (rideState === 'ASSIGNED' || rideState === 'IN_PROGRESS') {
-    mapMarkers.push({
-      id: 'driver',
-      position: pickupCoords || [6.5, 3.3], // Simulating driver at pickup
-      title: 'Your Chauffeur',
-      icon: 'taxi'
-    });
+  function deg2rad(deg: number) {
+    return deg * (Math.PI/180);
   }
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'Airport': return 'flight';
-      case 'Hotel': return 'hotel';
-      case 'Shopping': return 'shopping_bag';
-      case 'Education': return 'school';
-      case 'Tourism': return 'attractions';
-      case 'LGA': return 'map';
-      case 'District': return 'location_city';
-      case 'Residential': return 'home';
-      case 'Transport': return 'directions_bus';
-      default: return 'place';
+  const handleSelectLocation = (loc: SearchResult, type: 'pickup' | 'dest') => {
+    if (type === 'pickup') {
+      setPickup(loc);
+      setIsSearchingPickup(false);
+      setMapCenter([loc.lat, loc.lon]);
+    } else {
+      setDestination(loc);
+      setIsSearchingDest(false);
     }
+    setSearchQuery('');
   };
 
-  // Overlay for active ride states
-  const renderRideStatusOverlay = () => {
-    if (rideState === 'IDLE' || rideState === 'COMPLETED') return null;
+  const startRideRequest = () => {
+    CapacitorService.triggerHaptic();
+    setRideState('SEARCHING');
+    
+    // Simulate finding a driver
+    setTimeout(() => {
+      setDriverInfo({
+        name: 'Emmanuel K.',
+        car: 'Toyota Camry (2021)',
+        plate: 'LND-842-AX',
+        rating: 4.9,
+        trips: 1420,
+        avatar: IMAGES.DRIVER_CARD
+      });
+      setRideState('ASSIGNED');
+      
+      // Simulate Arrival
+      setTimeout(() => {
+        setRideState('IN_PROGRESS');
+        
+        // Simulate Completion
+        setTimeout(() => {
+          setRideState('COMPLETED');
+          // Add to Global History
+          onRideComplete({
+            id: `t_${Math.random().toString(36).substr(2, 6)}`,
+            ownerId: currentUser?.id,
+            ownerName: currentUser?.name || 'Me',
+            driverName: 'Emmanuel K.',
+            location: `${pickup?.display_name.split(',')[0]} -> ${destination?.display_name.split(',')[0]}`,
+            status: 'COMPLETED',
+            date: new Date().toLocaleString(),
+            amount: estimatedPrice
+          });
+        }, 8000); // 8 seconds trip
+      }, 5000); // 5 seconds arrival
+    }, 3000); // 3 seconds searching
+  };
 
-    return (
-      <div className="absolute inset-x-0 bottom-0 z-50 bg-surface-dark rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.8)] border-t border-white/10 p-6 animate-slide-up">
-        {rideState === 'SEARCHING' && (
-          <div className="flex flex-col items-center py-10 gap-4">
-            <div className="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
-            <h3 className="text-xl font-bold text-white">Locating Chauffeur...</h3>
-            <p className="text-slate-400 text-sm">Scanning premium network in Lagos</p>
-          </div>
-        )}
+  const resetRide = () => {
+    setRideState('IDLE');
+    setPickup(null);
+    setDestination(null);
+    setDriverInfo(null);
+  };
 
-        {(rideState === 'ASSIGNED' || rideState === 'IN_PROGRESS') && (
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between border-b border-white/5 pb-4">
-               <h3 className="text-lg font-bold text-white uppercase tracking-wider">
-                 {rideState === 'ASSIGNED' ? 'Chauffeur En Route' : 'Trip In Progress'}
-               </h3>
-               <span className="bg-primary/20 text-primary px-3 py-1 rounded-full text-xs font-black uppercase animate-pulse">
-                 {rideState === 'ASSIGNED' ? '2 mins away' : 'On Trip'}
-               </span>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <img src={MOCK_ASSIGNED_DRIVER.avatar} className="w-16 h-16 rounded-2xl object-cover ring-2 ring-primary" alt="Driver" />
-              <div className="flex-1">
-                <h4 className="text-xl font-black text-white">{MOCK_ASSIGNED_DRIVER.name}</h4>
-                <div className="flex items-center gap-2 text-sm text-slate-400">
-                  <span className="material-symbols-outlined text-yellow-500 text-sm filled">star</span>
-                  <span>{MOCK_ASSIGNED_DRIVER.rating}</span>
-                  <span>•</span>
-                  <span>{MOCK_ASSIGNED_DRIVER.car}</span>
-                </div>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="bg-white/10 px-2 py-1 rounded text-xs font-mono text-white mb-1">{MOCK_ASSIGNED_DRIVER.plate}</span>
-              </div>
-            </div>
+  const openGoogleMaps = () => {
+     if (destination) {
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${destination.lat},${destination.lon}`;
+        window.open(url, '_blank');
+     }
+  };
 
-            <div className="flex gap-3">
-              <button className="flex-1 bg-white/5 py-3 rounded-xl flex items-center justify-center gap-2 text-white font-bold hover:bg-white/10 transition-colors">
-                <span className="material-symbols-outlined">call</span> Call
-              </button>
-              <button className="flex-1 bg-white/5 py-3 rounded-xl flex items-center justify-center gap-2 text-white font-bold hover:bg-white/10 transition-colors">
-                <span className="material-symbols-outlined">chat</span> Message
-              </button>
-            </div>
-            
-            {rideState === 'IN_PROGRESS' && (
-              <div className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-center gap-3">
-                 <span className="material-symbols-outlined text-primary">security</span>
-                 <p className="text-xs text-slate-300">Ride is being monitored by Bicadriver Security.</p>
-              </div>
-            )}
-          </div>
-        )}
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(val).replace('NGN', '₦');
+  };
+
+  const filteredLocations = LAGOS_LOCATIONS.filter(l => 
+    l.display_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    l.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const renderSearchModal = (type: 'pickup' | 'dest') => (
+    <div className="fixed inset-0 z-50 bg-background-light dark:bg-background-dark flex flex-col animate-slide-up">
+      <div className="px-4 py-4 flex items-center gap-4 border-b border-slate-200 dark:border-slate-800">
+        <button 
+          onClick={() => type === 'pickup' ? setIsSearchingPickup(false) : setIsSearchingDest(false)}
+          className="w-10 h-10 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
+        >
+          <span className="material-symbols-outlined text-slate-900 dark:text-white">arrow_back</span>
+        </button>
+        <div className="flex-1 bg-slate-100 dark:bg-surface-dark rounded-xl flex items-center px-4 h-12">
+          <span className="material-symbols-outlined text-slate-400 mr-2">search</span>
+          <input 
+            autoFocus
+            className="bg-transparent border-none w-full text-base font-medium focus:ring-0 p-0 text-slate-900 dark:text-white"
+            placeholder={type === 'pickup' ? "Where are you?" : "Where to?"}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
       </div>
-    );
-  };
-
-  // Feedback Modal
-  const renderFeedbackModal = () => {
-    if (rideState !== 'COMPLETED') return null;
-
-    return (
-      <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
-        <div className="w-full max-w-sm bg-surface-dark border border-white/10 rounded-[2.5rem] p-6 shadow-2xl animate-scale-in relative overflow-hidden">
-          {/* Decorative background blur */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-primary/30 blur-[50px] rounded-full pointer-events-none"></div>
-
-          <div className="relative flex flex-col items-center text-center gap-4 pt-4">
-            <div className="w-20 h-20 rounded-full p-1 bg-gradient-to-tr from-primary to-accent mb-2">
-               <img src={MOCK_ASSIGNED_DRIVER.avatar} className="w-full h-full rounded-full object-cover border-4 border-surface-dark" alt="Driver" />
-            </div>
-            
-            <div>
-              <h2 className="text-2xl font-black text-white">Ride Completed</h2>
-              <p className="text-slate-400 text-sm mt-1">How was your trip with <span className="text-white font-bold">{MOCK_ASSIGNED_DRIVER.name}</span>?</p>
-            </div>
-
-            <div className="flex gap-2 my-2">
-              {[1, 2, 3, 4, 5].map((star) => (
+      
+      <div className="flex-1 overflow-y-auto p-4">
+        {searchQuery === '' && (
+          <div className="mb-6">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Categories</h3>
+            <div className="grid grid-cols-4 gap-4">
+              {DISCOVERY_CATEGORIES.map(cat => (
                 <button 
-                  key={star}
-                  onClick={() => setRating(star)}
-                  className="transition-transform active:scale-125 focus:outline-none"
+                  key={cat.label} 
+                  onClick={() => setSearchQuery(cat.type)}
+                  className="flex flex-col items-center gap-2"
                 >
-                  <span className={`material-symbols-outlined text-4xl ${rating >= star ? 'text-yellow-400 filled' : 'text-slate-600'}`}>
-                    star
-                  </span>
+                  <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                    <span className="material-symbols-outlined">{cat.icon}</span>
+                  </div>
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{cat.label}</span>
                 </button>
               ))}
             </div>
-            
-            <textarea 
-              className="w-full bg-input-dark border border-white/10 rounded-2xl p-4 text-white placeholder-slate-500 text-sm resize-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-              rows={3}
-              placeholder="Write a compliment or complaint..."
-              value={feedbackText}
-              onChange={(e) => setFeedbackText(e.target.value)}
-            />
-
-            <button 
-              onClick={handleSubmitRating}
-              disabled={rating === 0}
-              className={`w-full py-4 rounded-2xl font-black text-base uppercase tracking-widest mt-2 transition-all active:scale-[0.98] ${
-                rating > 0 ? 'bg-primary text-white shadow-lg shadow-primary/25' : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-              }`}
-            >
-              Submit Feedback
-            </button>
           </div>
+        )}
+
+        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Locations</h3>
+        <div className="space-y-2">
+          {filteredLocations.map(loc => (
+            <button 
+              key={loc.id}
+              onClick={() => handleSelectLocation(loc, type)}
+              className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-surface-dark transition-colors text-left"
+            >
+              <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-slate-500 text-lg">location_on</span>
+              </div>
+              <div>
+                <p className="font-bold text-slate-900 dark:text-white text-sm">{loc.display_name}</p>
+                <div className="flex items-center gap-2">
+                   <span className="text-[10px] bg-slate-200 dark:bg-slate-700 px-1.5 rounded text-slate-500 font-bold uppercase">{loc.category}</span>
+                   <p className="text-xs text-slate-500">{loc.description}</p>
+                </div>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+
+  const markers: any[] = [];
+  if (pickup) markers.push({ id: 'pickup', position: [pickup.lat, pickup.lon], title: 'Pickup', icon: 'pickup' });
+  if (destination) markers.push({ id: 'dest', position: [destination.lat, destination.lon], title: 'Destination', icon: 'destination' });
+  if (driverInfo && (rideState === 'ASSIGNED' || rideState === 'IN_PROGRESS')) {
+     // Simulate driver position near pickup
+     markers.push({ 
+       id: 'driver', 
+       position: [pickup!.lat + 0.002, pickup!.lon + 0.002], 
+       title: driverInfo.name, 
+       icon: 'taxi' 
+     });
+  }
 
   return (
-    <div className="h-screen w-full overflow-hidden flex flex-col relative bg-background-dark">
+    <div className="h-screen w-full flex flex-col relative bg-background-light dark:bg-background-dark overflow-hidden">
+      {/* Search Modals */}
+      {isSearchingPickup && renderSearchModal('pickup')}
+      {isSearchingDest && renderSearchModal('dest')}
+
+      {/* Map Layer */}
       <div className="absolute inset-0 z-0">
         <InteractiveMap 
           center={mapCenter} 
-          markers={mapMarkers} 
-          onMarkerDragEnd={handleMarkerDragEnd}
+          zoom={14} 
+          markers={markers}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-background-dark/40 via-transparent to-background-dark/95 pointer-events-none"></div>
+        {/* Gradients for UI visibility */}
+        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/60 to-transparent pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-background-light dark:from-background-dark via-background-light/80 dark:via-background-dark/80 to-transparent pointer-events-none"></div>
       </div>
 
-      <div className="relative z-30 flex items-center justify-between p-4 pt-10">
-        <button onClick={onBack} className="bg-surface-dark/95 backdrop-blur-3xl text-white size-12 flex items-center justify-center rounded-2xl shadow-2xl border border-white/10 active:scale-90 transition-all">
-          <span className="material-symbols-outlined">arrow_back</span>
-        </button>
-        <div className="bg-accent/10 backdrop-blur-xl border border-accent/30 px-4 py-2 rounded-full flex items-center gap-2 animate-fade-in shadow-xl">
-          <div className="w-2 h-2 rounded-full bg-accent animate-pulse"></div>
-          <span className="text-[10px] font-black text-accent uppercase tracking-widest">Global Location Intel</span>
-        </div>
-        <button onClick={onOpenProfile} className="bg-surface-dark/95 backdrop-blur-3xl text-white size-12 flex items-center justify-center rounded-2xl shadow-2xl border border-white/10 active:scale-90 transition-all">
-          <span className="material-symbols-outlined">person</span>
-        </button>
-      </div>
+      {/* Header */}
+      <header className="relative z-10 px-4 py-3 flex items-center justify-between">
+         <button 
+           onClick={onBack}
+           className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/30 transition-colors"
+         >
+           <span className="material-symbols-outlined">arrow_back</span>
+         </button>
+         <button 
+           onClick={onOpenProfile}
+           className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/30 transition-colors overflow-hidden border border-white/20"
+         >
+           {currentUser?.avatar ? (
+             <img src={currentUser.avatar} className="w-full h-full object-cover" alt="Profile" />
+           ) : (
+             <span className="material-symbols-outlined">person</span>
+           )}
+         </button>
+      </header>
 
       <div className="flex-1"></div>
 
-      {rideState === 'IDLE' && (
-        <div className="relative z-30 p-4 flex justify-end">
-          <button 
-            onClick={handleLocateMe}
-            className={`relative bg-white text-primary p-4 rounded-full shadow-2xl active:scale-90 transition-all ${isTrackingLive ? 'ring-4 ring-primary/40' : ''}`}
-          >
-            <span className={`material-symbols-outlined text-2xl ${isTrackingLive ? 'filled' : ''}`}>my_location</span>
-          </button>
-        </div>
-      )}
-
-      {/* Main Request Panel - Only visible when IDLE */}
-      {rideState === 'IDLE' && (
-        <div className="relative z-20 w-full bg-surface-dark rounded-t-[3.5rem] shadow-[0_-30px_80px_rgba(0,0,0,0.9)] border-t border-white/5 flex flex-col max-h-[85vh]">
-          <div className="w-full flex justify-center py-5"><div className="h-1.5 w-16 rounded-full bg-slate-700/40"></div></div>
-          
-          <div className="px-7 pb-12 flex flex-col gap-6 overflow-y-auto no-scrollbar">
-            <div className="flex p-1.5 bg-input-dark rounded-[2.5rem] border border-white/5 shadow-inner">
-              <button onClick={() => setRideType('now')} className={`flex-1 py-4 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.15em] transition-all ${rideType === 'now' ? 'bg-primary text-white shadow-2xl scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}>Ride Now</button>
-              <button onClick={() => setRideType('schedule')} className={`flex-1 py-4 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.15em] transition-all ${rideType === 'schedule' ? 'bg-primary text-white shadow-2xl scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}>Schedule</button>
-            </div>
-
-            {rideType === 'schedule' && (
-              <div className="flex flex-col gap-4 animate-slide-up">
-                <div className="grid grid-cols-2 gap-4">
-                  <input type="date" className="bg-input-dark rounded-3xl h-16 border-white/5 text-white font-bold color-scheme-dark px-4" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} />
-                  <input type="time" className="bg-input-dark rounded-3xl h-16 border-white/5 text-white font-bold color-scheme-dark px-4" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} />
-                </div>
-                <p className="text-[11px] font-bold text-accent italic text-center">{getFriendlyScheduleText()}</p>
-              </div>
-            )}
-
-            <div className="flex flex-col gap-6">
-              <div className="relative">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Pickup</label>
-                <div className="flex items-center bg-input-dark rounded-[1.75rem] border border-white/5 shadow-xl transition-all focus-within:ring-2 focus-within:ring-primary/40 pr-2">
-                  <input 
-                    className="w-full bg-transparent px-5 h-16 border-none text-white font-bold focus:ring-0 placeholder-slate-700"
-                    placeholder="Where from?"
-                    value={pickupLocation}
-                    onChange={e => handleInputChange(e.target.value, 'pickup')}
-                    onFocus={() => handleInputFocus('pickup')}
-                    onBlur={() => setTimeout(() => { if(!activeSearchField) setActiveSearchField(null) }, 200)} // Delay hide to allow click
-                  />
-                  <div className="size-12 flex items-center justify-center text-slate-400">
-                    <span className="material-symbols-outlined text-[20px]">search</span>
-                  </div>
-                </div>
-                {activeSearchField === 'pickup' && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-surface-dark rounded-3xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto no-scrollbar animate-slide-up">
-                    {pickupResults.length > 0 ? (
-                      <>
-                        <div className="px-4 py-2 bg-black/20 text-[10px] font-bold uppercase text-slate-500 tracking-widest">
-                          {pickupLocation.length < 2 ? 'Popular Locations' : 'Search Results'}
-                        </div>
-                        {pickupResults.map(res => (
-                          <button key={res.id} onClick={() => selectResult(res, 'pickup')} className="w-full p-4 text-left border-b border-white/5 hover:bg-primary/20 flex items-center gap-3 group transition-all">
-                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400 group-hover:text-accent">
-                              <span className="material-symbols-outlined text-sm">{getCategoryIcon(res.category)}</span>
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-white font-bold text-sm group-hover:text-accent">{res.display_name}</span>
-                              <span className="text-slate-500 text-[10px] truncate">{res.description}</span>
-                            </div>
-                            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-slate-500">{res.category}</span>
-                          </button>
-                        ))}
-                      </>
-                    ) : (
-                       <div className="p-6 text-center text-slate-500 text-xs flex flex-col items-center gap-2">
-                         <span className="material-symbols-outlined text-2xl opacity-50">wrong_location</span>
-                         No locations found
-                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="relative">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Destination</label>
-                <div className="flex items-center bg-input-dark rounded-[1.75rem] border border-white/5 shadow-xl transition-all focus-within:ring-2 focus-within:ring-primary/40 pr-2">
-                  <input 
-                    className="w-full bg-transparent px-5 h-16 border-none text-white font-bold focus:ring-0 placeholder-slate-700"
-                    placeholder="Where to?"
-                    value={destination}
-                    onChange={e => handleInputChange(e.target.value, 'destination')}
-                    onFocus={() => handleInputFocus('destination')}
-                    onBlur={() => setTimeout(() => { if(!activeSearchField) setActiveSearchField(null) }, 200)}
-                  />
-                  <div className="size-12 flex items-center justify-center text-slate-400">
-                    <span className="material-symbols-outlined text-[20px]">search</span>
-                  </div>
-                </div>
-                {activeSearchField === 'destination' && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-surface-dark rounded-3xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-60 overflow-y-auto no-scrollbar animate-slide-up">
-                    {destResults.length > 0 ? (
-                      <>
-                        <div className="px-4 py-2 bg-black/20 text-[10px] font-bold uppercase text-slate-500 tracking-widest">
-                          {destination.length < 2 ? 'Popular Locations' : 'Search Results'}
-                        </div>
-                        {destResults.map(res => (
-                          <button key={res.id} onClick={() => selectResult(res, 'destination')} className="w-full p-4 text-left border-b border-white/5 hover:bg-primary/20 flex items-center gap-3 group transition-all">
-                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400 group-hover:text-accent">
-                              <span className="material-symbols-outlined text-sm">{getCategoryIcon(res.category)}</span>
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-white font-bold text-sm group-hover:text-accent">{res.display_name}</span>
-                              <span className="text-slate-500 text-[10px] truncate">{res.description}</span>
-                            </div>
-                            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-slate-500">{res.category}</span>
-                          </button>
-                        ))}
-                      </>
-                    ) : (
-                       <div className="p-6 text-center text-slate-500 text-xs flex flex-col items-center gap-2">
-                         <span className="material-symbols-outlined text-2xl opacity-50">wrong_location</span>
-                         No locations found
-                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-4">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Live Discovery</span>
-              <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
-                {DISCOVERY_CATEGORIES.map((cat, i) => (
-                  <button 
-                    key={i} 
-                    onClick={() => handleCategorySelect(cat.type)} 
-                    className={`flex items-center gap-2 px-5 py-3 rounded-2xl transition-all shrink-0 border ${
-                      activeCategory === cat.type ? 'bg-accent/20 border-accent/50 text-accent' : 'bg-input-dark/60 border-white/5 text-slate-300'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-sm">{cat.icon}</span>
-                    <span className="text-[11px] font-black uppercase">{cat.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {aiInsight && !isAiLoading && (
-              <div className="bg-primary/10 border border-primary/30 rounded-3xl p-5 flex gap-4 shadow-xl">
-                <div className="shrink-0 p-2 bg-primary/20 rounded-xl h-fit">
-                  <span className="material-symbols-outlined text-accent text-2xl filled">auto_awesome</span>
-                </div>
-                <p className="text-[12px] text-slate-300 font-bold italic leading-relaxed">{aiInsight}</p>
-              </div>
-            )}
-
-            <div className="mt-6 flex flex-col gap-8">
-              <div className="flex items-center justify-between px-3">
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">Elite Estimate</span>
-                  <span className="text-[34px] font-black text-white tracking-tighter">₦15,000</span>
-                </div>
-                <div className="bg-input-dark/80 px-6 py-4 rounded-3xl border border-white/10 shadow-lg">
-                  <span className="text-[11px] font-black text-slate-300 uppercase tracking-widest">VISA • 4288</span>
-                </div>
-              </div>
+      {/* Bottom Sheet UI */}
+      <div className="relative z-20 px-4 pb-8">
+         {rideState === 'IDLE' && (
+           <div className="bg-surface-light dark:bg-surface-dark rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 animate-slide-up">
+              <h2 className="text-lg font-bold mb-4">Plan your ride</h2>
               
-              <button 
-                onClick={() => {
-                  CapacitorService.triggerHaptic();
-                  startRideSimulation();
-                }}
-                disabled={!isFormValid() || isSearching}
-                className={`w-full h-20 rounded-[2.25rem] font-black text-[17px] uppercase tracking-widest flex items-center justify-center gap-4 transition-all active:scale-[0.97] shadow-2xl ${
-                  isFormValid() ? 'bg-primary text-white hover:brightness-110 shadow-primary/40' : 'bg-slate-800 text-slate-600 opacity-50'
-                }`}
-              >
-                {isSearching ? <span className="material-symbols-outlined animate-spin">progress_activity</span> : (
-                  <>
-                    <span>{rideType === 'now' ? 'Request Chauffeur' : 'Confirm Schedule'}</span>
-                    <span className="material-symbols-outlined text-3xl">trending_flat</span>
-                  </>
-                )}
-              </button>
+              <div className="flex flex-col gap-4 relative">
+                 {/* Connecting Line */}
+                 <div className="absolute left-[19px] top-8 bottom-8 w-0.5 bg-slate-200 dark:bg-slate-700 z-0"></div>
+
+                 {/* Pickup Input */}
+                 <button 
+                   onClick={() => setIsSearchingPickup(true)}
+                   className="flex items-center gap-4 relative z-10"
+                 >
+                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700">
+                       <span className="material-symbols-outlined text-primary text-xl">trip_origin</span>
+                    </div>
+                    <div className="flex-1 h-14 bg-slate-50 dark:bg-black/20 rounded-xl flex items-center px-4 border border-transparent hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+                       <p className={`text-sm font-medium truncate ${pickup ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
+                          {pickup ? pickup.display_name : "Current Location"}
+                       </p>
+                    </div>
+                 </button>
+
+                 {/* Destination Input */}
+                 <button 
+                   onClick={() => setIsSearchingDest(true)}
+                   className="flex items-center gap-4 relative z-10"
+                 >
+                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700">
+                       <span className="material-symbols-outlined text-slate-900 dark:text-white text-xl">location_on</span>
+                    </div>
+                    <div className="flex-1 h-14 bg-slate-50 dark:bg-black/20 rounded-xl flex items-center px-4 border border-transparent hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+                       <p className={`text-sm font-medium truncate ${destination ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
+                          {destination ? destination.display_name : "Enter Destination"}
+                       </p>
+                    </div>
+                 </button>
+              </div>
+
+              {pickup && destination && (
+                <div className="mt-6 animate-fade-in">
+                   <div className="flex items-center justify-between mb-4 bg-primary/5 p-4 rounded-2xl border border-primary/10">
+                      <div>
+                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Estimated Fare</p>
+                         <p className="text-2xl font-black text-slate-900 dark:text-white">{formatCurrency(estimatedPrice)}</p>
+                      </div>
+                      <div className="text-right">
+                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Distance</p>
+                         <p className="text-lg font-bold text-slate-900 dark:text-white">{estimatedDistance} km</p>
+                      </div>
+                   </div>
+                   <button 
+                     onClick={startRideRequest}
+                     className="w-full h-14 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                   >
+                     Request Driver
+                     <span className="material-symbols-outlined">arrow_forward</span>
+                   </button>
+                </div>
+              )}
+           </div>
+         )}
+
+         {rideState === 'SEARCHING' && (
+            <div className="bg-surface-light dark:bg-surface-dark rounded-3xl p-8 shadow-2xl border border-slate-200 dark:border-slate-800 text-center animate-slide-up">
+               <div className="w-20 h-20 mx-auto bg-primary/10 rounded-full flex items-center justify-center mb-4 relative">
+                  <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+                  <span className="material-symbols-outlined text-primary text-3xl">radar</span>
+               </div>
+               <h3 className="text-xl font-bold mb-1">Finding a Driver</h3>
+               <p className="text-slate-500">Connecting you with nearby professionals...</p>
+               <button onClick={resetRide} className="mt-6 text-slate-400 font-bold text-sm hover:text-slate-600">Cancel Request</button>
             </div>
-          </div>
-        </div>
-      )}
+         )}
 
-      {renderRideStatusOverlay()}
-      {renderFeedbackModal()}
+         {(rideState === 'ASSIGNED' || rideState === 'IN_PROGRESS') && driverInfo && (
+            <div className="bg-surface-light dark:bg-surface-dark rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 animate-slide-up">
+               <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                     <span className="relative flex h-3 w-3">
+                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                       <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                     </span>
+                     <span className="text-sm font-bold text-slate-900 dark:text-white">
+                        {rideState === 'ASSIGNED' ? 'Driver is on the way' : 'Trip in progress'}
+                     </span>
+                  </div>
+                  <span className="text-xs font-bold bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-500">
+                     {rideState === 'ASSIGNED' ? '5 mins' : `${estimatedDistance} km left`}
+                  </span>
+               </div>
+               
+               <div className="flex items-center gap-4 mb-6">
+                  <img src={driverInfo.avatar} className="w-16 h-16 rounded-2xl object-cover ring-2 ring-primary/20" alt="Driver" />
+                  <div className="flex-1">
+                     <h3 className="text-lg font-bold leading-tight">{driverInfo.name}</h3>
+                     <p className="text-sm text-slate-500">{driverInfo.car} • {driverInfo.plate}</p>
+                     <div className="flex items-center gap-1 mt-1">
+                        <span className="material-symbols-outlined text-yellow-500 text-sm filled">star</span>
+                        <span className="text-xs font-bold">{driverInfo.rating}</span>
+                        <span className="text-xs text-slate-400">({driverInfo.trips} trips)</span>
+                     </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                     <button className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors">
+                        <span className="material-symbols-outlined">call</span>
+                     </button>
+                     <button className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:bg-slate-200 transition-colors">
+                        <span className="material-symbols-outlined">chat</span>
+                     </button>
+                  </div>
+               </div>
 
+               <div className="flex gap-3">
+                  <button 
+                    onClick={openGoogleMaps}
+                    className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-2"
+                  >
+                     <span className="material-symbols-outlined text-lg">map</span>
+                     Track
+                  </button>
+                  <button className="flex-1 py-3 rounded-xl bg-red-500/10 font-bold text-red-500 flex items-center justify-center gap-2">
+                     <span className="material-symbols-outlined text-lg">shield</span>
+                     SOS
+                  </button>
+               </div>
+            </div>
+         )}
+
+         {rideState === 'COMPLETED' && (
+            <div className="bg-surface-light dark:bg-surface-dark rounded-3xl p-8 shadow-2xl border border-slate-200 dark:border-slate-800 text-center animate-scale-in">
+               <div className="w-20 h-20 mx-auto bg-green-500 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-green-500/30">
+                  <span className="material-symbols-outlined text-white text-4xl filled">check</span>
+               </div>
+               <h3 className="text-2xl font-black mb-2">You've Arrived!</h3>
+               <p className="text-slate-500 mb-6">How was your ride with {driverInfo?.name}?</p>
+               
+               <div className="flex justify-center gap-2 mb-6">
+                  {[1,2,3,4,5].map(star => (
+                     <button key={star} className="text-slate-300 hover:text-yellow-400 transition-colors">
+                        <span className="material-symbols-outlined text-4xl filled">star</span>
+                     </button>
+                  ))}
+               </div>
+
+               <div className="bg-slate-50 dark:bg-black/20 rounded-xl p-4 mb-6">
+                  <div className="flex justify-between items-center mb-2">
+                     <span className="text-sm font-medium text-slate-500">Trip Fare</span>
+                     <span className="text-sm font-bold">{formatCurrency(estimatedPrice)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-green-500">
+                     <span className="text-sm font-medium">Paid via Wallet</span>
+                     <span className="material-symbols-outlined text-sm filled">check_circle</span>
+                  </div>
+               </div>
+
+               <button 
+                 onClick={resetRide}
+                 className="w-full h-14 bg-primary text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-all"
+               >
+                 Close
+               </button>
+            </div>
+         )}
+      </div>
     </div>
   );
 };

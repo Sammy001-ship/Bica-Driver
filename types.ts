@@ -33,6 +33,35 @@ export interface UserProfile {
   nin?: string;
   ninImage?: string;
   transmission?: 'Manual' | 'Automatic' | 'Both';
+  isBlocked?: boolean;
+}
+
+export interface Trip {
+  id: string;
+  driverId?: string;
+  ownerId?: string;
+  driverName: string;
+  ownerName: string;
+  date: string;
+  amount: number;
+  status: 'COMPLETED' | 'CANCELLED' | 'PENDING' | 'IN_PROGRESS';
+  location: string;
+}
+
+export interface Payout {
+  id: string;
+  driverId: string;
+  driverName: string;
+  amount: number;
+  status: 'PENDING' | 'PAID';
+  date: string;
+}
+
+export interface SystemSettings {
+  baseFare: number;
+  pricePerKm: number;
+  commission: number;
+  autoApprove: boolean;
 }
 
 export enum AppScreen {

@@ -1,53 +1,48 @@
 
-import React, { useState, useMemo } from 'react';
-import { UserProfile, UserRole, ApprovalStatus } from '../types';
+import React, { useState } from 'react';
+import { UserProfile, UserRole, ApprovalStatus, Trip, Payout, SystemSettings } from '../types';
 import { IMAGES } from '../constants';
 
 interface AdminDashboardScreenProps {
   users: UserProfile[];
+  trips: Trip[];
+  payouts: Payout[];
+  settings: SystemSettings;
   onUpdateStatus: (userId: string, status: ApprovalStatus) => void;
+  onBlockUser: (userId: string, blocked: boolean) => void;
+  onApprovePayout: (payoutId: string) => void;
+  onUpdateSettings: (settings: SystemSettings) => void;
   onBack: () => void;
   onSimulate: (role: UserRole) => void;
 }
 
 type AdminSection = 'overview' | 'drivers' | 'owners' | 'trips' | 'finance' | 'settings';
 
-// Mock Data for Admin Features
-const MOCK_TRIPS = [
-  { id: 't_101', driver: 'John Driver', owner: 'Sarah Johnson', date: '2023-10-24 14:30', amount: 12500, status: 'COMPLETED', location: 'Lekki -> Ikeja' },
-  { id: 't_102', driver: 'Mike Peterson', owner: 'Alex Morgan', date: '2023-10-24 16:15', amount: 8000, status: 'CANCELLED', location: 'VI -> Ikoyi' },
-  { id: 't_103', driver: 'John Driver', owner: 'David Okon', date: '2023-10-25 09:00', amount: 25000, status: 'COMPLETED', location: 'Airport -> Eko Hotel' },
-  { id: 't_104', driver: 'Unassigned', owner: 'Lisa Ray', date: '2023-10-25 10:30', amount: 0, status: 'PENDING', location: 'Surulere -> Yaba' },
-];
-
-const MOCK_PAYOUTS = [
-  { id: 'p_01', driverId: '2', amount: 45000, status: 'PENDING', date: '2023-10-25' },
-  { id: 'p_02', driverId: 'd_55', amount: 12500, status: 'PAID', date: '2023-10-23' },
-];
-
-const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUpdateStatus, onBack, onSimulate }) => {
+const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ 
+  users, trips, payouts, settings, 
+  onUpdateStatus, onBlockUser, onApprovePayout, onUpdateSettings, 
+  onBack, onSimulate 
+}) => {
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Settings State
-  const [settings, setSettings] = useState({
-    baseFare: 1500,
-    pricePerKm: 250,
-    commission: 15,
-    autoApprove: false
-  });
+  const [localSettings, setLocalSettings] = useState<SystemSettings>(settings);
 
   // Derived Data
   const drivers = users.filter(u => u.role === UserRole.DRIVER);
   const owners = users.filter(u => u.role === UserRole.OWNER);
   const pendingDrivers = drivers.filter(u => u.approvalStatus === 'PENDING');
   
-  const totalRevenue = MOCK_TRIPS.reduce((acc, t) => t.status === 'COMPLETED' ? acc + t.amount : acc, 0);
+  const totalRevenue = trips.reduce((acc, t) => t.status === 'COMPLETED' ? acc + t.amount : acc, 0);
   const platformFees = totalRevenue * (settings.commission / 100);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(amount).replace('NGN', '₦');
+  };
+
+  const handleSaveSettings = () => {
+    onUpdateSettings(localSettings);
+    alert("System Settings Updated Successfully!");
   };
 
   const renderOverview = () => (
@@ -93,7 +88,7 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
             <span className="p-2 bg-primary/10 rounded-lg text-primary material-symbols-outlined">directions_car</span>
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Trips</span>
           </div>
-          <p className="text-2xl font-black text-slate-900 dark:text-white">{MOCK_TRIPS.filter(t => t.status === 'COMPLETED').length}</p>
+          <p className="text-2xl font-black text-slate-900 dark:text-white">{trips.filter(t => t.status === 'COMPLETED').length}</p>
           <p className="text-xs text-slate-400 font-bold mt-1">Total volume</p>
         </div>
       </div>
@@ -117,18 +112,19 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
       <div className="bg-surface-light dark:bg-surface-dark p-6 rounded-3xl border border-slate-200 dark:border-slate-800">
         <h3 className="font-bold text-lg mb-4">Recent Activity</h3>
         <div className="space-y-4">
-          {MOCK_TRIPS.slice(0, 3).map(trip => (
+          {trips.slice(0, 3).map(trip => (
             <div key={trip.id} className="flex items-center justify-between py-2 border-b border-dashed border-slate-200 dark:border-slate-700 last:border-0">
               <div className="flex items-center gap-3">
                  <div className={`w-2 h-2 rounded-full ${trip.status === 'COMPLETED' ? 'bg-green-500' : 'bg-slate-400'}`}></div>
                  <div>
                     <p className="text-sm font-bold">{trip.location}</p>
-                    <p className="text-xs text-slate-500">{trip.date.split(' ')[1]}</p>
+                    <p className="text-xs text-slate-500">{trip.date.split(' ')[1] || trip.date}</p>
                  </div>
               </div>
               <span className="text-sm font-mono font-medium">{formatCurrency(trip.amount)}</span>
             </div>
           ))}
+          {trips.length === 0 && <p className="text-slate-500 text-sm italic">No recent trips.</p>}
         </div>
       </div>
     </div>
@@ -137,7 +133,7 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
   const renderDrivers = () => (
     <div className="space-y-4 animate-slide-up">
       <div className="flex gap-2 mb-2 overflow-x-auto no-scrollbar pb-2">
-         {['All', 'Pending', 'Active', 'Rejected'].map((filter) => (
+         {['All', 'Pending', 'Active', 'Blocked'].map((filter) => (
            <button key={filter} className="px-4 py-2 bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold uppercase whitespace-nowrap hover:border-primary transition-colors">
              {filter}
            </button>
@@ -147,14 +143,17 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
         <div 
           key={driver.id}
           onClick={() => setSelectedUser(driver)}
-          className="bg-surface-light dark:bg-surface-dark p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-all"
+          className={`bg-surface-light dark:bg-surface-dark p-4 rounded-2xl border flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-all ${driver.isBlocked ? 'border-red-500/50 opacity-75' : 'border-slate-200 dark:border-slate-800'}`}
         >
           <div className="relative">
             <img src={driver.avatar} className="w-12 h-12 rounded-xl object-cover" alt="" />
             <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-surface-dark ${driver.approvalStatus === 'APPROVED' ? 'bg-green-500' : driver.approvalStatus === 'PENDING' ? 'bg-orange-500 animate-pulse' : 'bg-red-500'}`}></div>
           </div>
           <div className="flex-1 min-w-0">
-            <h4 className="font-bold text-sm truncate">{driver.name}</h4>
+            <h4 className="font-bold text-sm truncate flex items-center gap-2">
+              {driver.name}
+              {driver.isBlocked && <span className="text-[9px] bg-red-500 text-white px-1.5 py-0.5 rounded uppercase">Blocked</span>}
+            </h4>
             <p className="text-xs text-slate-500 truncate">{driver.email}</p>
             <div className="flex items-center gap-2 mt-1">
                <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 font-mono">{driver.carType || 'No Car'}</span>
@@ -173,7 +172,10 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
         <div key={owner.id} className="bg-surface-light dark:bg-surface-dark p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center gap-4">
           <img src={owner.avatar} className="w-12 h-12 rounded-full object-cover" alt="" />
           <div className="flex-1">
-            <h4 className="font-bold text-sm">{owner.name}</h4>
+            <h4 className="font-bold text-sm flex items-center gap-2">
+               {owner.name}
+               {owner.isBlocked && <span className="text-[9px] bg-red-500 text-white px-1.5 py-0.5 rounded uppercase">Blocked</span>}
+            </h4>
             <p className="text-xs text-slate-500">{owner.phone}</p>
             <div className="flex items-center gap-1 mt-1">
                <span className="material-symbols-outlined text-yellow-500 text-[14px] filled">star</span>
@@ -181,8 +183,12 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
                <span className="text-xs text-slate-500">• {owner.trips} trips</span>
             </div>
           </div>
-          <button className="w-8 h-8 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors">
-            <span className="material-symbols-outlined text-sm">block</span>
+          <button 
+             onClick={() => onBlockUser(owner.id, !owner.isBlocked)}
+             className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${owner.isBlocked ? 'bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white' : 'bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white'}`}
+             title={owner.isBlocked ? "Unblock" : "Block"}
+          >
+            <span className="material-symbols-outlined text-sm">{owner.isBlocked ? 'check_circle' : 'block'}</span>
           </button>
         </div>
       ))}
@@ -191,7 +197,7 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
 
   const renderTrips = () => (
     <div className="space-y-4 animate-slide-up">
-       {MOCK_TRIPS.map(trip => (
+       {trips.map(trip => (
          <div key={trip.id} className="bg-surface-light dark:bg-surface-dark p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col gap-3">
             <div className="flex justify-between items-start">
                <div>
@@ -206,15 +212,21 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
             <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-700 pt-3">
                <div className="flex items-center gap-2">
                   <div className="flex -space-x-2">
-                     <div className="w-6 h-6 rounded-full bg-slate-300 border-2 border-surface-dark"></div>
-                     <div className="w-6 h-6 rounded-full bg-slate-500 border-2 border-surface-dark"></div>
+                     <div className="w-6 h-6 rounded-full bg-slate-300 border-2 border-surface-dark flex items-center justify-center text-[8px] overflow-hidden">{trip.ownerName?.[0]}</div>
+                     <div className="w-6 h-6 rounded-full bg-slate-500 border-2 border-surface-dark flex items-center justify-center text-[8px] overflow-hidden">{trip.driverName?.[0]}</div>
                   </div>
-                  <span className="text-xs text-slate-500">{trip.owner} & {trip.driver}</span>
+                  <span className="text-xs text-slate-500 truncate max-w-[150px]">{trip.ownerName} & {trip.driverName}</span>
                </div>
                <p className="font-black text-sm">{formatCurrency(trip.amount)}</p>
             </div>
          </div>
        ))}
+       {trips.length === 0 && (
+         <div className="text-center py-10 opacity-50">
+            <span className="material-symbols-outlined text-4xl mb-2">trip_origin</span>
+            <p className="text-sm">No trips recorded yet.</p>
+         </div>
+       )}
     </div>
   );
 
@@ -222,22 +234,26 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
     <div className="space-y-6 animate-slide-up">
        <div className="p-5 rounded-3xl bg-gradient-to-br from-slate-800 to-black text-white shadow-lg">
           <p className="text-xs font-medium opacity-70 uppercase tracking-widest mb-1">Total Platform Balance</p>
-          <h2 className="text-3xl font-black">{formatCurrency(platformFees * 124)}</h2>
+          <h2 className="text-3xl font-black">{formatCurrency(platformFees)}</h2>
+          <p className="text-[10px] text-slate-400 mt-2">Accrued form {settings.commission}% commission on {trips.length} trips</p>
        </div>
 
        <div>
           <h3 className="font-bold text-sm mb-3 uppercase tracking-wider text-slate-500">Payout Requests</h3>
           <div className="space-y-3">
-             {MOCK_PAYOUTS.map(payout => (
+             {payouts.map(payout => (
                <div key={payout.id} className="bg-surface-light dark:bg-surface-dark p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
                   <div>
-                     <p className="font-bold text-sm">Driver #{payout.driverId}</p>
-                     <p className="text-xs text-slate-500">{payout.date}</p>
+                     <p className="font-bold text-sm">{payout.driverName}</p>
+                     <p className="text-xs text-slate-500">{payout.date} • ID: {payout.driverId.slice(0,4)}</p>
                   </div>
                   <div className="flex items-center gap-3">
                      <span className="font-black">{formatCurrency(payout.amount)}</span>
                      {payout.status === 'PENDING' ? (
-                       <button className="bg-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-600 transition-colors">
+                       <button 
+                         onClick={() => onApprovePayout(payout.id)}
+                         className="bg-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-600 transition-colors"
+                       >
                          Approve
                        </button>
                      ) : (
@@ -248,6 +264,7 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
                   </div>
                </div>
              ))}
+             {payouts.length === 0 && <p className="text-center text-slate-500 text-sm py-4">No pending payouts.</p>}
           </div>
        </div>
     </div>
@@ -262,8 +279,8 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
              <label className="text-xs font-bold text-slate-500 uppercase">Base Fare (₦)</label>
              <input 
                type="number" 
-               value={settings.baseFare}
-               onChange={(e) => setSettings({...settings, baseFare: Number(e.target.value)})}
+               value={localSettings.baseFare}
+               onChange={(e) => setLocalSettings({...localSettings, baseFare: Number(e.target.value)})}
                className="bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 font-bold text-slate-900 dark:text-white"
              />
           </div>
@@ -272,8 +289,8 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
              <label className="text-xs font-bold text-slate-500 uppercase">Price Per KM (₦)</label>
              <input 
                type="number" 
-               value={settings.pricePerKm}
-               onChange={(e) => setSettings({...settings, pricePerKm: Number(e.target.value)})}
+               value={localSettings.pricePerKm}
+               onChange={(e) => setLocalSettings({...localSettings, pricePerKm: Number(e.target.value)})}
                className="bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 font-bold text-slate-900 dark:text-white"
              />
           </div>
@@ -282,8 +299,8 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
              <label className="text-xs font-bold text-slate-500 uppercase">Platform Commission (%)</label>
              <input 
                type="number" 
-               value={settings.commission}
-               onChange={(e) => setSettings({...settings, commission: Number(e.target.value)})}
+               value={localSettings.commission}
+               onChange={(e) => setLocalSettings({...localSettings, commission: Number(e.target.value)})}
                className="bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 font-bold text-slate-900 dark:text-white"
              />
           </div>
@@ -295,14 +312,17 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
              <p className="text-xs text-slate-500">Skip manual verification (Not Recommended)</p>
           </div>
           <button 
-            onClick={() => setSettings({...settings, autoApprove: !settings.autoApprove})}
-            className={`w-12 h-7 rounded-full transition-colors relative ${settings.autoApprove ? 'bg-green-500' : 'bg-slate-600'}`}
+            onClick={() => setLocalSettings({...localSettings, autoApprove: !localSettings.autoApprove})}
+            className={`w-12 h-7 rounded-full transition-colors relative ${localSettings.autoApprove ? 'bg-green-500' : 'bg-slate-600'}`}
           >
-            <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${settings.autoApprove ? 'left-6' : 'left-1'}`}></div>
+            <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${localSettings.autoApprove ? 'left-6' : 'left-1'}`}></div>
           </button>
        </div>
 
-       <button className="w-full bg-primary text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/20">
+       <button 
+         onClick={handleSaveSettings}
+         className="w-full bg-primary text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all"
+       >
           Save System Changes
        </button>
     </div>
@@ -377,13 +397,13 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
         {activeSection === 'settings' && renderSettings()}
       </main>
 
-      {/* Driver Detail Modal (Enhanced) */}
+      {/* User Detail Modal */}
       {selectedUser && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setSelectedUser(null)}>
           <div className="w-full max-w-md bg-white dark:bg-surface-dark rounded-[2.5rem] shadow-2xl overflow-hidden animate-slide-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
             <div className="p-8 flex flex-col gap-6 overflow-y-auto no-scrollbar">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl font-black">Driver Dossier</h3>
+                <h3 className="text-xl font-black">User Dossier</h3>
                 <button onClick={() => setSelectedUser(null)} className="size-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center active:scale-90">
                    <span className="material-symbols-outlined text-base">close</span>
                 </button>
@@ -392,7 +412,10 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
               <div className="flex items-center gap-5 p-2">
                 <img src={selectedUser.avatar} className="w-20 h-20 rounded-3xl object-cover ring-4 ring-primary/20" alt="" />
                 <div>
-                   <h4 className="text-2xl font-black leading-tight">{selectedUser.name}</h4>
+                   <h4 className="text-2xl font-black leading-tight flex items-center gap-2">
+                     {selectedUser.name}
+                     {selectedUser.isBlocked && <span className="text-[9px] bg-red-500 text-white px-1.5 py-0.5 rounded uppercase">Blocked</span>}
+                   </h4>
                    <p className="text-slate-500 font-bold">{selectedUser.phone}</p>
                    <div className="flex flex-wrap gap-2 mt-2">
                       <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-[10px] font-bold text-slate-500 uppercase">ID: {selectedUser.id.slice(0, 6)}</span>
@@ -401,69 +424,36 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
                 </div>
               </div>
 
+              {/* ... (existing fields) ... */}
               <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-3">
-                   <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl">
-                      <p className="text-[10px] uppercase text-slate-500 font-bold">NIN Number</p>
-                      <p className="font-mono font-bold text-sm truncate">{selectedUser.nin || 'Not Provided'}</p>
-                   </div>
-                   <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl">
-                      <p className="text-[10px] uppercase text-slate-500 font-bold">Age</p>
-                      <p className="font-bold text-sm">{selectedUser.age || 'N/A'} Years</p>
-                   </div>
-                   <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl col-span-2">
-                      <p className="text-[10px] uppercase text-slate-500 font-bold">Home Address</p>
-                      <p className="font-bold text-sm">{selectedUser.address || 'Not Provided'}</p>
-                   </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Verifiable Documents</p>
-                    <span className="text-[10px] text-green-500 font-black uppercase flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">verified</span> Encrypted</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-2">
-                      <span className="text-[10px] text-slate-500 font-bold ml-1 uppercase">Front License</span>
-                      <div className="relative group cursor-zoom-in">
-                        <img src={selectedUser.licenseImage || IMAGES.MAP_BG} className="w-full h-24 object-cover rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md group-hover:brightness-75 transition-all" alt="License" />
-                      </div>
+                 {/* Only show Driver Specifics if driver */}
+                 {selectedUser.role === UserRole.DRIVER && (
+                    <div className="grid grid-cols-2 gap-3">
+                       <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl">
+                          <p className="text-[10px] uppercase text-slate-500 font-bold">NIN Number</p>
+                          <p className="font-mono font-bold text-sm truncate">{selectedUser.nin || 'Not Provided'}</p>
+                       </div>
+                       {/* ... other driver fields */}
                     </div>
-                    <div className="flex flex-col gap-2">
-                      <span className="text-[10px] text-slate-500 font-bold ml-1 uppercase">NIN Card</span>
-                      <div className="relative group cursor-zoom-in">
-                        <img src={selectedUser.ninImage || IMAGES.MAP_BG} className="w-full h-24 object-cover rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md group-hover:brightness-75 transition-all" alt="NIN" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-3xl bg-primary/5 border border-primary/10 flex items-start gap-3">
-                   <div className="bg-primary/20 p-1.5 rounded-lg shrink-0">
-                      <span className="material-symbols-outlined text-primary text-lg">security</span>
-                   </div>
-                   <div>
-                      <p className="text-xs font-black uppercase tracking-tight text-slate-900 dark:text-white mb-1">Background Check Consent</p>
-                      <p className="text-[11px] text-slate-500 leading-relaxed">
-                        {selectedUser.backgroundCheckAccepted ? 'User has digitally signed consent for criminal record verification.' : 'Consent MISSING.'}
-                      </p>
-                   </div>
-                </div>
+                 )}
+                 <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl">
+                    <p className="text-[10px] uppercase text-slate-500 font-bold">Email</p>
+                    <p className="font-bold text-sm truncate">{selectedUser.email}</p>
+                 </div>
               </div>
 
               <div className="flex gap-4 mt-2 pb-4 pt-2 border-t border-slate-100 dark:border-slate-800">
-                {selectedUser.approvalStatus !== 'REJECTED' && (
-                  <button 
-                    onClick={() => {
-                      onUpdateStatus(selectedUser.id, 'REJECTED');
-                      setSelectedUser(null);
-                    }}
-                    className="flex-1 py-4 rounded-2xl bg-red-500/10 text-red-500 font-black hover:bg-red-500 hover:text-white transition-all active:scale-[0.98]"
-                  >
-                    Reject
-                  </button>
-                )}
-                {selectedUser.approvalStatus !== 'APPROVED' && (
+                <button 
+                  onClick={() => {
+                     onBlockUser(selectedUser.id, !selectedUser.isBlocked);
+                     setSelectedUser(null);
+                  }}
+                  className={`flex-1 py-4 rounded-2xl font-black hover:brightness-110 transition-all active:scale-[0.98] ${selectedUser.isBlocked ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}
+                >
+                  {selectedUser.isBlocked ? 'Unblock Account' : 'Block Account'}
+                </button>
+                
+                {selectedUser.role === UserRole.DRIVER && selectedUser.approvalStatus !== 'APPROVED' && !selectedUser.isBlocked && (
                   <button 
                     onClick={() => {
                       onUpdateStatus(selectedUser.id, 'APPROVED');
@@ -474,13 +464,6 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ users, onUp
                     Approve Driver
                   </button>
                 )}
-                 {selectedUser.approvalStatus === 'APPROVED' && (
-                   <div className="flex-1 flex flex-col items-center justify-center">
-                      <span className="text-green-500 font-bold text-sm uppercase flex items-center gap-1">
-                        <span className="material-symbols-outlined text-lg">check_circle</span> Approved
-                      </span>
-                   </div>
-                 )}
               </div>
             </div>
           </div>

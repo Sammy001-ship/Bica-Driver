@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { AppScreen, UserRole, UserProfile, ApprovalStatus } from './types';
+import { AppScreen, UserRole, UserProfile, ApprovalStatus, Trip, Payout, SystemSettings } from './types';
 import WelcomeScreen from './screens/WelcomeScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -26,7 +26,8 @@ const MOCK_USERS: UserProfile[] = [
     walletBalance: 0,
     gender: "Male",
     nationality: "American",
-    age: "34"
+    age: "34",
+    isBlocked: false
   },
   {
     id: '2',
@@ -42,8 +43,19 @@ const MOCK_USERS: UserProfile[] = [
     walletBalance: 45250,
     transmission: 'Both',
     age: "28",
-    nin: "12345678901"
+    nin: "12345678901",
+    isBlocked: false
   }
+];
+
+const INITIAL_TRIPS: Trip[] = [
+  { id: 't_101', driverName: 'John Driver', ownerName: 'Sarah Johnson', date: '2023-10-24 14:30', amount: 12500, status: 'COMPLETED', location: 'Lekki -> Ikeja' },
+  { id: 't_102', driverName: 'Mike Peterson', ownerName: 'Alex Morgan', date: '2023-10-24 16:15', amount: 8000, status: 'CANCELLED', location: 'VI -> Ikoyi' },
+  { id: 't_103', driverName: 'John Driver', ownerName: 'David Okon', date: '2023-10-25 09:00', amount: 25000, status: 'COMPLETED', location: 'Airport -> Eko Hotel' },
+];
+
+const INITIAL_PAYOUTS: Payout[] = [
+  { id: 'p_01', driverId: '2', driverName: 'John Driver', amount: 45000, status: 'PENDING', date: '2023-10-25' },
 ];
 
 const App: React.FC = () => {
@@ -51,6 +63,16 @@ const App: React.FC = () => {
   const [selectedSignupRole, setSelectedSignupRole] = useState<UserRole>(UserRole.UNSET);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [allUsers, setAllUsers] = useState<UserProfile[]>(MOCK_USERS);
+  
+  // Global State for Real-time features
+  const [trips, setTrips] = useState<Trip[]>(INITIAL_TRIPS);
+  const [payouts, setPayouts] = useState<Payout[]>(INITIAL_PAYOUTS);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>({
+    baseFare: 1500,
+    pricePerKm: 250,
+    commission: 15,
+    autoApprove: false
+  });
 
   useEffect(() => {
     CapacitorService.initStatusBar();
@@ -75,23 +97,23 @@ const App: React.FC = () => {
       email: userData.email || '',
       phone: userData.phone || '',
       role: selectedSignupRole,
-      rating: 0,
+      rating: 5.0,
       trips: 0,
       avatar: userData.avatar || (selectedSignupRole === UserRole.DRIVER ? IMAGES.DRIVER_CARD : IMAGES.USER_AVATAR),
       carType: userData.carType,
       licenseImage: userData.licenseImage,
       selfieImage: userData.selfieImage,
       backgroundCheckAccepted: userData.backgroundCheckAccepted,
-      approvalStatus: selectedSignupRole === UserRole.DRIVER ? 'PENDING' : 'APPROVED',
+      approvalStatus: systemSettings.autoApprove ? 'APPROVED' : (selectedSignupRole === UserRole.DRIVER ? 'PENDING' : 'APPROVED'),
       walletBalance: 0,
-      // New Fields
       gender: userData.gender,
       address: userData.address,
       nationality: userData.nationality,
       age: userData.age,
       nin: userData.nin,
       ninImage: userData.ninImage,
-      transmission: userData.transmission
+      transmission: userData.transmission,
+      isBlocked: false
     };
 
     setAllUsers([...allUsers, newUser]);
@@ -118,6 +140,11 @@ const App: React.FC = () => {
     const user = allUsers.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
 
     if (user) {
+      if (user.isBlocked) {
+         alert("Account Suspended: Please contact support.");
+         return;
+      }
+
       if (user.role === UserRole.DRIVER) {
         if (user.approvalStatus === 'REJECTED') {
           alert("Login Denied: Your driver application was rejected. Please contact support.");
@@ -134,25 +161,64 @@ const App: React.FC = () => {
     }
   };
 
+  // ADMIN ACTIONS
   const handleUpdateDriverStatus = (userId: string, status: ApprovalStatus) => {
     setAllUsers(prevUsers => prevUsers.map(u => 
       u.id === userId ? { ...u, approvalStatus: status } : u
     ));
-    
     if (currentUser && currentUser.id === userId) {
       setCurrentUser(prev => prev ? { ...prev, approvalStatus: status } : null);
     }
   };
 
+  const handleBlockUser = (userId: string, blocked: boolean) => {
+    setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, isBlocked: blocked } : u));
+    if (currentUser && currentUser.id === userId) {
+      setCurrentUser(prev => prev ? { ...prev, isBlocked: blocked } : null);
+    }
+  };
+
+  const handleApprovePayout = (payoutId: string) => {
+    setPayouts(prev => prev.map(p => p.id === payoutId ? { ...p, status: 'PAID' } : p));
+  };
+
+  const handleUpdateSettings = (newSettings: SystemSettings) => {
+    setSystemSettings(newSettings);
+  };
+
+  // USER ACTIONS
   const handleUpdateEarnings = (amount: number) => {
     if (!currentUser) return;
-    
     const newBalance = (currentUser.walletBalance || 0) + amount;
     
+    // Update local currentUser
     setCurrentUser(prev => prev ? { ...prev, walletBalance: newBalance } : null);
+    // Update in global users list
     setAllUsers(prevUsers => prevUsers.map(u => 
       u.id === currentUser.id ? { ...u, walletBalance: newBalance } : u
     ));
+  };
+
+  const handleAddTrip = (trip: Trip) => {
+    setTrips(prev => [trip, ...prev]);
+  };
+
+  const handleRequestPayout = (amount: number) => {
+    if (!currentUser) return;
+    const newPayout: Payout = {
+      id: `p_${Math.random().toString(36).substr(2, 5)}`,
+      driverId: currentUser.id,
+      driverName: currentUser.name,
+      amount: amount,
+      status: 'PENDING',
+      date: new Date().toISOString().split('T')[0]
+    };
+    setPayouts(prev => [newPayout, ...prev]);
+    // Optionally deduct from wallet immediately or wait for approval
+    // For visual clarity, we'll reset wallet here to show it's "moved" to payout
+    const newBalance = (currentUser.walletBalance || 0) - amount;
+    setCurrentUser(prev => prev ? { ...prev, walletBalance: newBalance } : null);
+    setAllUsers(prevUsers => prevUsers.map(u => u.id === currentUser.id ? { ...u, walletBalance: newBalance } : u));
   };
 
   const handleSimulate = (role: UserRole) => {
@@ -173,7 +239,8 @@ const App: React.FC = () => {
       address: 'Admin HQ',
       nationality: 'Global',
       age: '99',
-      transmission: 'Automatic'
+      transmission: 'Automatic',
+      isBlocked: false
     };
     
     setCurrentUser(adminUser);
@@ -185,7 +252,6 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // Check if it's the admin preview user
     if (currentUser?.id === 'admin_preview') {
       setCurrentUser(null);
       navigateTo(AppScreen.ADMIN_DASHBOARD);
@@ -206,9 +272,22 @@ const App: React.FC = () => {
       case AppScreen.LOGIN:
         return <LoginScreen onLogin={handleLogin} onBack={() => navigateTo(AppScreen.WELCOME)} onGoToSignUp={handleStart} />;
       case AppScreen.MAIN_REQUEST:
-        return <RequestRideScreen onOpenProfile={() => navigateTo(AppScreen.PROFILE)} onBack={handleLogout} />;
+        return <RequestRideScreen 
+          settings={systemSettings} 
+          onOpenProfile={() => navigateTo(AppScreen.PROFILE)} 
+          onBack={handleLogout} 
+          onRideComplete={handleAddTrip}
+          currentUser={currentUser}
+        />;
       case AppScreen.DRIVER_DASHBOARD:
-        return <DriverMainScreen user={currentUser} onOpenProfile={() => navigateTo(AppScreen.PROFILE)} onBack={handleLogout} onUpdateEarnings={handleUpdateEarnings} />;
+        return <DriverMainScreen 
+          user={currentUser} 
+          onOpenProfile={() => navigateTo(AppScreen.PROFILE)} 
+          onBack={handleLogout} 
+          onUpdateEarnings={handleUpdateEarnings}
+          onRequestPayout={handleRequestPayout}
+          onRideComplete={handleAddTrip}
+        />;
       case AppScreen.PROFILE:
         if (!currentUser) return <WelcomeScreen onCreateAccount={handleStart} onLogin={() => navigateTo(AppScreen.LOGIN)} />;
         return (
@@ -224,7 +303,20 @@ const App: React.FC = () => {
           />
         );
       case AppScreen.ADMIN_DASHBOARD:
-        return <AdminDashboardScreen users={allUsers} onUpdateStatus={handleUpdateDriverStatus} onBack={() => navigateTo(AppScreen.WELCOME)} onSimulate={handleSimulate} />;
+        return (
+          <AdminDashboardScreen 
+            users={allUsers} 
+            trips={trips}
+            payouts={payouts}
+            settings={systemSettings}
+            onUpdateStatus={handleUpdateDriverStatus} 
+            onBlockUser={handleBlockUser}
+            onApprovePayout={handleApprovePayout}
+            onUpdateSettings={handleUpdateSettings}
+            onBack={() => navigateTo(AppScreen.WELCOME)} 
+            onSimulate={handleSimulate} 
+          />
+        );
       default:
         return <WelcomeScreen onCreateAccount={handleStart} onLogin={() => navigateTo(AppScreen.LOGIN)} />;
     }

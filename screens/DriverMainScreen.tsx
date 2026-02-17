@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import InteractiveMap from '../components/InteractiveMap';
 import { CapacitorService } from '../services/CapacitorService';
-import { UserProfile } from '../types';
+import { UserProfile, Trip } from '../types';
 
 interface RideRequest {
   id: string;
@@ -39,13 +39,18 @@ interface DriverMainScreenProps {
   onOpenProfile: () => void;
   onBack: () => void;
   onUpdateEarnings: (amount: number) => void;
+  onRequestPayout: (amount: number) => void;
+  onRideComplete: (trip: Trip) => void;
 }
 
-const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile, onBack, onUpdateEarnings }) => {
+const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ 
+  user, onOpenProfile, onBack, onUpdateEarnings, onRequestPayout, onRideComplete 
+}) => {
   const [isOnline, setIsOnline] = useState(true);
   const [activeRide, setActiveRide] = useState<RideRequest | null>(null);
   const [ridePhase, setRidePhase] = useState<RidePhase>('pickup');
   const [driverPos, setDriverPos] = useState<[number, number]>([6.4549, 3.3896]);
+  const [showPayoutModal, setShowPayoutModal] = useState(false);
   const trackingInterval = useRef<any>(null);
 
   const approvalStatus = user?.approvalStatus || 'PENDING';
@@ -84,9 +89,22 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
     
     CapacitorService.triggerHaptic();
     
-    // Parse the price (strip commas) and update total earnings in global state
+    // Parse the price (strip commas)
     const tripPrice = parseInt(activeRide.price.replace(/,/g, ''), 10);
     onUpdateEarnings(tripPrice);
+    
+    // Report to Admin Dashboard History
+    const newTrip: Trip = {
+      id: `t_${Math.random().toString(36).substr(2, 5)}`,
+      driverId: user?.id,
+      driverName: user?.name || 'Unknown Driver',
+      ownerName: activeRide.ownerName,
+      date: new Date().toLocaleString(),
+      amount: tripPrice,
+      status: 'COMPLETED',
+      location: `${activeRide.pickup.split(',')[0]} -> ${activeRide.destination.split(',')[0]}`
+    };
+    onRideComplete(newTrip);
     
     setRidePhase('completed');
     
@@ -97,9 +115,22 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
     }, 4000);
   };
 
+  const handleRequestPayoutClick = () => {
+    if (totalEarnings < 5000) {
+      alert("Minimum payout amount is ₦5,000");
+      return;
+    }
+    setShowPayoutModal(true);
+  };
+
+  const confirmPayout = () => {
+    onRequestPayout(totalEarnings);
+    setShowPayoutModal(false);
+    alert("Payout request sent to Admin successfully!");
+  };
+
   const openNavigation = (coords: [number, number]) => {
     CapacitorService.triggerHaptic();
-    // Opens Google Maps with direction to the coordinates
     const url = `https://www.google.com/maps/dir/?api=1&destination=${coords[0]},${coords[1]}`;
     window.open(url, '_blank');
   };
@@ -132,26 +163,7 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
           <h2 className="text-2xl font-black text-white">Verification Pending</h2>
           <p className="text-slate-400 font-medium">Your application is currently being reviewed by our administration team. This usually takes 24-48 hours.</p>
         </div>
-        <div className="w-full space-y-4 pt-6">
-           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-left flex items-start gap-4">
-              <span className="material-symbols-outlined text-green-500">check_circle</span>
-              <div>
-                 <p className="text-sm font-bold text-white">Documentation Received</p>
-                 <p className="text-xs text-slate-500">Your license and selfie have been securely uploaded.</p>
-              </div>
-           </div>
-           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-left flex items-start gap-4 opacity-50">
-              <span className="material-symbols-outlined text-slate-500">pending</span>
-              <div>
-                 <p className="text-sm font-bold text-white">Manual Review</p>
-                 <p className="text-xs text-slate-500">Our team is verifying your credentials.</p>
-              </div>
-           </div>
-        </div>
-        <button 
-          onClick={onBack}
-          className="mt-6 w-full py-4 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all active:scale-95"
-        >
+        <button onClick={onBack} className="mt-6 w-full py-4 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all active:scale-95">
           Logout & Wait
         </button>
       </div>
@@ -166,12 +178,9 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
         </div>
         <div className="space-y-3">
           <h2 className="text-2xl font-black text-white">Application Rejected</h2>
-          <p className="text-slate-400 font-medium">Unfortunately, your driver application does not meet our current requirements. Please contact support for more details.</p>
+          <p className="text-slate-400 font-medium">Unfortunately, your driver application does not meet our current requirements.</p>
         </div>
-        <button 
-          onClick={onBack}
-          className="mt-6 w-full py-4 rounded-xl bg-red-500 text-white font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all"
-        >
+        <button onClick={onBack} className="mt-6 w-full py-4 rounded-xl bg-red-500 text-white font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all">
           Log Out
         </button>
       </div>
@@ -231,7 +240,10 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
                 <span className="text-xl font-black text-white tracking-tight">{formatCurrency(totalEarnings)}</span>
               </div>
               <div className="w-px h-8 bg-white/10 mx-2"></div>
-              <button className="text-primary text-[10px] font-black uppercase tracking-widest hover:underline active:scale-95 transition-all">
+              <button 
+                onClick={handleRequestPayoutClick}
+                className="text-primary text-[10px] font-black uppercase tracking-widest hover:underline active:scale-95 transition-all"
+              >
                 Payout
               </button>
             </div>
@@ -288,6 +300,7 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
               </>
            ) : (
               <div className="flex flex-col gap-6 animate-slide-up">
+                 {/* ... Active Ride UI (same as before) ... */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <img src={activeRide.avatar} className="w-12 h-12 rounded-full object-cover ring-2 ring-primary" alt="" />
@@ -313,11 +326,7 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
                     <div className={`w-3 h-3 rounded-sm ${ridePhase === 'trip' ? 'bg-primary animate-pulse' : 'bg-slate-700'}`}></div>
                   </div>
                   <div className="flex-1 flex flex-col gap-4">
-                    <div 
-                      onClick={() => openNavigation(activeRide.coords)} 
-                      className="group cursor-pointer hover:bg-white/5 p-2 -ml-2 rounded-lg transition-colors"
-                      title="Click to navigate"
-                    >
+                    <div onClick={() => openNavigation(activeRide.coords)} className="group cursor-pointer hover:bg-white/5 p-2 -ml-2 rounded-lg transition-colors">
                        <div className="flex items-center gap-2 mb-1">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Pick up</p>
                           <span className="material-symbols-outlined text-[14px] text-primary opacity-0 group-hover:opacity-100 transition-opacity">navigation</span>
@@ -327,11 +336,7 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
                          <span className="material-symbols-outlined text-[14px] text-slate-500">open_in_new</span>
                        </p>
                     </div>
-                    <div 
-                      onClick={() => openNavigation(activeRide.destCoords)} 
-                      className="group cursor-pointer hover:bg-white/5 p-2 -ml-2 rounded-lg transition-colors"
-                      title="Click to navigate"
-                    >
+                    <div onClick={() => openNavigation(activeRide.destCoords)} className="group cursor-pointer hover:bg-white/5 p-2 -ml-2 rounded-lg transition-colors">
                        <div className="flex items-center gap-2 mb-1">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Drop off</p>
                           <span className="material-symbols-outlined text-[14px] text-primary opacity-0 group-hover:opacity-100 transition-opacity">navigation</span>
@@ -375,22 +380,31 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ user, onOpenProfile
                     <div className="w-14 h-14 bg-green-500 rounded-full flex items-center justify-center text-white mb-2 shadow-lg shadow-green-500/40">
                        <span className="material-symbols-outlined text-3xl filled">verified</span>
                     </div>
-                    <p className="text-green-500 text-xl font-black">
-                       Trip Success!
-                    </p>
-                    <p className="text-slate-400 text-sm font-medium">
-                       +{formatCurrency(parseInt(activeRide.price.replace(/,/g, ''), 10))} added to your wallet
-                    </p>
-                    <div className="mt-4 flex items-center gap-2 bg-background-dark/50 px-4 py-2 rounded-full border border-white/5">
-                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">New Balance:</span>
-                      <span className="text-sm font-bold text-white">{formatCurrency(totalEarnings)}</span>
-                    </div>
+                    <p className="text-green-500 text-xl font-black">Trip Success!</p>
                   </div>
                 )}
               </div>
            )}
         </div>
       </div>
+
+      {showPayoutModal && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-surface-dark border border-white/10 p-6 rounded-[2rem] w-full max-w-sm text-center">
+               <span className="material-symbols-outlined text-4xl text-white mb-3 bg-white/10 p-4 rounded-full">payments</span>
+               <h3 className="text-xl font-bold text-white mb-2">Request Payout</h3>
+               <p className="text-slate-400 text-sm mb-6">
+                 Withdraw your full balance of <span className="text-white font-bold">{formatCurrency(totalEarnings)}</span>? 
+                 <br/><br/>
+                 This request will be sent to Admin for approval.
+               </p>
+               <div className="flex gap-3">
+                  <button onClick={() => setShowPayoutModal(false)} className="flex-1 py-3 rounded-xl bg-white/5 text-slate-300 font-bold">Cancel</button>
+                  <button onClick={confirmPayout} className="flex-1 py-3 rounded-xl bg-primary text-white font-bold">Confirm</button>
+               </div>
+            </div>
+         </div>
+      )}
     </div>
   );
 };
