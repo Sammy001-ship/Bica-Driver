@@ -67,8 +67,18 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
   const [isSearchingDest, setIsSearchingDest] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Vehicle Details State
+  const [showVehicleForm, setShowVehicleForm] = useState(false);
+  const [vehicleData, setVehicleData] = useState({
+    make: '',
+    model: '',
+    year: '',
+    transmission: 'Automatic'
+  });
+
   // Simulation State
   const [driverInfo, setDriverInfo] = useState<any>(null);
+  const timerRefs = useRef<any[]>([]);
 
   useEffect(() => {
     // Get initial location
@@ -77,7 +87,21 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
         setMapCenter([pos.coords.latitude, pos.coords.longitude]);
       }
     });
+    
+    // Cleanup timers on unmount
+    return () => clearTimers();
   }, []);
+
+  // Pre-fill vehicle data from profile
+  useEffect(() => {
+    if (currentUser) {
+      setVehicleData(prev => ({
+        ...prev,
+        make: currentUser.carType || '',
+        transmission: (currentUser.transmission as string) || 'Automatic'
+      }));
+    }
+  }, [currentUser]);
 
   // Calculate Price when points change
   useEffect(() => {
@@ -118,12 +142,31 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
     setSearchQuery('');
   };
 
-  const startRideRequest = () => {
+  const clearTimers = () => {
+    timerRefs.current.forEach(clearTimeout);
+    timerRefs.current = [];
+  };
+
+  const handleInitiateRequest = () => {
     CapacitorService.triggerHaptic();
+    setShowVehicleForm(true);
+  };
+
+  const handleConfirmRequest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vehicleData.make || !vehicleData.model || !vehicleData.year) {
+      alert("Please fill in all vehicle details to proceed.");
+      return;
+    }
+    setShowVehicleForm(false);
+    startRideRequest();
+  };
+
+  const startRideRequest = () => {
     setRideState('SEARCHING');
     
     // Simulate finding a driver
-    setTimeout(() => {
+    const t1 = setTimeout(() => {
       setDriverInfo({
         name: 'Emmanuel K.',
         car: 'Toyota Camry (2021)',
@@ -135,11 +178,11 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
       setRideState('ASSIGNED');
       
       // Simulate Arrival
-      setTimeout(() => {
+      const t2 = setTimeout(() => {
         setRideState('IN_PROGRESS');
         
         // Simulate Completion
-        setTimeout(() => {
+        const t3 = setTimeout(() => {
           setRideState('COMPLETED');
           // Add to Global History
           onRideComplete({
@@ -153,11 +196,15 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
             amount: estimatedPrice
           });
         }, 8000); // 8 seconds trip
+        timerRefs.current.push(t3);
       }, 5000); // 5 seconds arrival
+      timerRefs.current.push(t2);
     }, 3000); // 3 seconds searching
+    timerRefs.current.push(t1);
   };
 
   const resetRide = () => {
+    clearTimers();
     setRideState('IDLE');
     setPickup(null);
     setDestination(null);
@@ -354,7 +401,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
                       </div>
                    </div>
                    <button 
-                     onClick={startRideRequest}
+                     onClick={handleInitiateRequest}
                      className="w-full h-14 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                    >
                      Request Driver
@@ -428,6 +475,15 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
                      SOS
                   </button>
                </div>
+               
+               {rideState === 'ASSIGNED' && (
+                 <button 
+                   onClick={resetRide}
+                   className="mt-4 w-full py-3 rounded-xl border border-red-500/20 text-red-500 font-bold text-sm hover:bg-red-500/5 transition-colors active:scale-95"
+                 >
+                   Cancel Ride
+                 </button>
+               )}
             </div>
          )}
 
@@ -467,6 +523,91 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
             </div>
          )}
       </div>
+
+      {/* Vehicle Details Modal */}
+      {showVehicleForm && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center p-4 animate-fade-in">
+          <div className="w-full bg-surface-light dark:bg-surface-dark rounded-[2rem] p-6 shadow-2xl animate-slide-up" onClick={e => e.stopPropagation()}>
+             <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Vehicle Details</h3>
+                <button 
+                  onClick={() => setShowVehicleForm(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                   <span className="material-symbols-outlined">close</span>
+                </button>
+             </div>
+             
+             <form onSubmit={handleConfirmRequest} className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase ml-1">Make</label>
+                        <input 
+                           required
+                           placeholder="e.g. Toyota"
+                           className="w-full h-12 bg-slate-50 dark:bg-input-dark rounded-xl px-4 font-bold text-slate-900 dark:text-white border-none focus:ring-1 focus:ring-primary placeholder-slate-400"
+                           value={vehicleData.make}
+                           onChange={e => setVehicleData({...vehicleData, make: e.target.value})}
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase ml-1">Model</label>
+                        <input 
+                           required
+                           placeholder="e.g. Camry"
+                           className="w-full h-12 bg-slate-50 dark:bg-input-dark rounded-xl px-4 font-bold text-slate-900 dark:text-white border-none focus:ring-1 focus:ring-primary placeholder-slate-400"
+                           value={vehicleData.model}
+                           onChange={e => setVehicleData({...vehicleData, model: e.target.value})}
+                        />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase ml-1">Year</label>
+                        <input 
+                           required
+                           type="number"
+                           placeholder="e.g. 2020"
+                           className="w-full h-12 bg-slate-50 dark:bg-input-dark rounded-xl px-4 font-bold text-slate-900 dark:text-white border-none focus:ring-1 focus:ring-primary placeholder-slate-400"
+                           value={vehicleData.year}
+                           onChange={e => setVehicleData({...vehicleData, year: e.target.value})}
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-500 uppercase ml-1">Transmission</label>
+                        <div className="relative">
+                            <select 
+                               className="w-full h-12 bg-slate-50 dark:bg-input-dark rounded-xl px-4 font-bold text-slate-900 dark:text-white border-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
+                               value={vehicleData.transmission}
+                               onChange={e => setVehicleData({...vehicleData, transmission: e.target.value})}
+                            >
+                                <option value="Automatic" className="dark:bg-surface-dark">Automatic</option>
+                                <option value="Manual" className="dark:bg-surface-dark">Manual</option>
+                            </select>
+                            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">expand_more</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-blue-500/10 p-4 rounded-xl flex items-start gap-3 mt-2 border border-blue-500/20">
+                    <span className="material-symbols-outlined text-blue-500 mt-0.5">info</span>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 leading-relaxed font-medium">
+                        Providing accurate vehicle details ensures we match you with a driver experienced in handling your specific car type.
+                    </p>
+                </div>
+
+                <button 
+                  type="submit"
+                  className="w-full h-14 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/25 mt-2 active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:bg-green-700"
+                >
+                  Find Driver
+                  <span className="material-symbols-outlined">search</span>
+                </button>
+             </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

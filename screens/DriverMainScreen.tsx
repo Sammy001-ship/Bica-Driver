@@ -68,6 +68,12 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
     return () => clearInterval(trackingInterval.current);
   }, [isOnline, approvalStatus]);
 
+  const toggleOnline = () => {
+    if (activeRide) return;
+    CapacitorService.triggerHaptic();
+    setIsOnline(prev => !prev);
+  };
+
   const handleAcceptRide = (ride: RideRequest) => {
     CapacitorService.triggerHaptic();
     setActiveRide(ride);
@@ -199,7 +205,7 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
 
   return (
     <div className="h-screen w-full overflow-hidden flex flex-col relative bg-background-dark font-display">
-      <div className="absolute inset-0 z-0">
+      <div className={`absolute inset-0 z-0 transition-all duration-700 ${!isOnline ? 'grayscale brightness-50 contrast-125' : ''}`}>
         <InteractiveMap center={driverPos} markers={mapMarkers} />
         <div className="absolute inset-0 bg-gradient-to-b from-[#101622]/40 via-transparent to-[#101622]/90 pointer-events-none"></div>
       </div>
@@ -207,23 +213,46 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
       <div className="relative z-10 p-4 pt-8 bg-gradient-to-b from-background-dark/90 to-transparent flex flex-col gap-4">
         <div className="flex items-center justify-between">
           {!activeRide && (
-            <button onClick={onBack} className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg active:scale-90 transition-all">
+            <button onClick={onBack} className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg active:scale-90 transition-all border border-white/10">
               <span className="material-symbols-outlined">logout</span>
             </button>
           )}
           
-          <button 
-            onClick={() => !activeRide && setIsOnline(!isOnline)} 
-            disabled={!!activeRide}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-md border border-white/10 transition-all ${activeRide ? 'bg-primary text-white cursor-default' : isOnline ? 'bg-primary/90 text-white cursor-pointer' : 'bg-surface-dark/80 text-slate-400 cursor-pointer'}`}
-          >
-            <div className={`w-2.5 h-2.5 rounded-full ${isOnline || activeRide ? 'bg-green-400 animate-pulse' : 'bg-slate-500'}`}></div>
-            <span className="text-sm font-bold tracking-tight uppercase">
-              {activeRide ? getPhaseText() : isOnline ? 'Online' : 'Offline'}
-            </span>
-          </button>
+          {!activeRide ? (
+            <div className="flex-1 mx-3 h-12 bg-surface-dark/80 backdrop-blur-xl border border-white/10 rounded-full p-1 flex items-stretch relative shadow-lg">
+               {/* Background Slider */}
+               <div 
+                 className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full transition-all duration-300 shadow-md ${
+                   isOnline ? 'translate-x-full left-0 ml-1 bg-primary' : 'left-1 bg-slate-600'
+                 }`}
+               ></div>
+               
+               <button 
+                 onClick={() => isOnline && toggleOnline()}
+                 className={`flex-1 relative z-10 flex items-center justify-center gap-2 rounded-full transition-all active:scale-95 ${!isOnline ? 'text-white cursor-default' : 'text-slate-400 hover:text-white'}`}
+               >
+                 <span className="text-[10px] font-black uppercase tracking-widest">Offline</span>
+               </button>
+               
+               <button 
+                 onClick={() => !isOnline && toggleOnline()}
+                 className={`flex-1 relative z-10 flex items-center justify-center gap-2 rounded-full transition-all active:scale-95 ${isOnline ? 'text-white cursor-default' : 'text-slate-400 hover:text-white'}`}
+               >
+                 <span className="text-[10px] font-black uppercase tracking-widest">Online</span>
+               </button>
+            </div>
+          ) : (
+            // Active Ride Status Bar (Locked)
+            <div className="flex-1 mx-3 h-12 bg-primary/90 backdrop-blur-md border border-primary/50 rounded-full flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400"></span>
+                </span>
+                <span className="text-white text-xs font-black uppercase tracking-wider">{getPhaseText()}</span>
+            </div>
+          )}
 
-          <button onClick={onOpenProfile} className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg active:scale-90 transition-all">
+          <button onClick={onOpenProfile} className="bg-surface-dark/80 backdrop-blur-md text-white flex size-10 items-center justify-center rounded-full shadow-lg active:scale-90 transition-all border border-white/10">
             <span className="material-symbols-outlined">person</span>
           </button>
         </div>
@@ -231,7 +260,7 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
         {/* Global Wallet Display */}
         {!activeRide && (
           <div className="animate-fade-in flex justify-center mt-2">
-            <div className="bg-surface-dark/90 backdrop-blur-xl border border-white/10 rounded-2xl p-4 px-6 flex items-center gap-4 shadow-2xl">
+            <div className={`bg-surface-dark/90 backdrop-blur-xl border border-white/10 rounded-2xl p-4 px-6 flex items-center gap-4 shadow-2xl transition-all duration-500 ${!isOnline ? 'opacity-50' : 'opacity-100'}`}>
               <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary">
                 <span className="material-symbols-outlined filled">account_balance_wallet</span>
               </div>
@@ -270,37 +299,45 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
                     )}
                  </div>
                  
-                 {isOnline && MOCK_REQUESTS.map(req => (
-                    <div key={req.id} className="bg-input-dark/40 p-5 rounded-3xl border border-white/5 flex flex-col gap-4 shadow-lg animate-slide-up">
-                       <div className="flex items-center gap-4">
-                          <img src={req.avatar} className="w-12 h-12 rounded-full object-cover ring-2 ring-white/5" alt="" />
-                          <div className="flex-1">
-                             <h4 className="font-bold text-white text-base leading-tight">{req.ownerName}</h4>
-                             <p className="text-slate-500 text-xs mt-1 flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">map</span>{req.pickup}</p>
-                          </div>
-                          <div className="text-right">
-                             <p className="font-black text-white text-lg leading-none">₦{req.price}</p>
-                             <p className="text-primary text-[10px] font-bold mt-1.5">{req.time} away</p>
-                          </div>
-                       </div>
-                       <button 
-                        onClick={() => handleAcceptRide(req)} 
-                        className="w-full bg-primary text-white font-black py-4 rounded-2xl active:scale-[0.97] transition-all hover:brightness-110"
-                       >
-                        Accept Ride
-                       </button>
-                    </div>
-                 ))}
-                 {!isOnline && (
-                   <div className="py-10 text-center flex flex-col items-center gap-4 opacity-40">
-                      <span className="material-symbols-outlined text-5xl">wifi_off</span>
-                      <p className="text-sm font-medium">Radar disabled while offline</p>
+                 {isOnline ? (
+                   MOCK_REQUESTS.map(req => (
+                      <div key={req.id} className="bg-input-dark/40 p-5 rounded-3xl border border-white/5 flex flex-col gap-4 shadow-lg animate-slide-up">
+                         <div className="flex items-center gap-4">
+                            <img src={req.avatar} className="w-12 h-12 rounded-full object-cover ring-2 ring-white/5" alt="" />
+                            <div className="flex-1">
+                               <h4 className="font-bold text-white text-base leading-tight">{req.ownerName}</h4>
+                               <p className="text-slate-500 text-xs mt-1 flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">map</span>{req.pickup}</p>
+                            </div>
+                            <div className="text-right">
+                               <p className="font-black text-white text-lg leading-none">₦{req.price}</p>
+                               <p className="text-primary text-[10px] font-bold mt-1.5">{req.time} away</p>
+                            </div>
+                         </div>
+                         <button 
+                          onClick={() => handleAcceptRide(req)} 
+                          className="w-full bg-primary text-white font-black py-4 rounded-2xl active:scale-[0.97] transition-all hover:brightness-110"
+                         >
+                          Accept Ride
+                         </button>
+                      </div>
+                   ))
+                 ) : (
+                   <div className="py-12 text-center flex flex-col items-center gap-6 animate-fade-in">
+                      <div className="w-20 h-20 rounded-full bg-slate-800/50 flex items-center justify-center border-2 border-slate-700 border-dashed">
+                        <span className="material-symbols-outlined text-4xl text-slate-500">wifi_off</span>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-white mb-1">You're Offline</h3>
+                        <p className="text-slate-400 text-xs font-medium max-w-[200px] mx-auto leading-relaxed">
+                           Switch to online mode above to start receiving ride requests.
+                        </p>
+                      </div>
                    </div>
                  )}
               </>
            ) : (
               <div className="flex flex-col gap-6 animate-slide-up">
-                 {/* ... Active Ride UI (same as before) ... */}
+                 {/* ... Active Ride UI ... */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <img src={activeRide.avatar} className="w-12 h-12 rounded-full object-cover ring-2 ring-primary" alt="" />
