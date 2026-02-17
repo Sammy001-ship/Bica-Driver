@@ -34,6 +34,12 @@ export interface UserProfile {
   ninImage?: string;
   transmission?: 'Manual' | 'Automatic' | 'Both';
   isBlocked?: boolean;
+  
+  // Real-time location
+  currentLocation?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 export interface Trip {

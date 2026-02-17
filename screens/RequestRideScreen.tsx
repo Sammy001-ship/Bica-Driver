@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { CapacitorService } from '../services/CapacitorService';
 import InteractiveMap from '../components/InteractiveMap';
 import { IMAGES } from '../constants';
-import { SystemSettings, Trip, UserProfile } from '../types';
+import { SystemSettings, Trip, UserProfile, UserRole } from '../types';
 
 interface SearchResult {
   id: string;
@@ -20,6 +20,7 @@ interface RequestRideScreenProps {
   settings: SystemSettings;
   onRideComplete: (trip: Trip) => void;
   currentUser: UserProfile | null;
+  allUsers: UserProfile[];
 }
 
 type RideState = 'IDLE' | 'SEARCHING' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED';
@@ -53,7 +54,8 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
   onBack, 
   settings, 
   onRideComplete,
-  currentUser
+  currentUser,
+  allUsers
 }) => {
   const [pickup, setPickup] = useState<SearchResult | null>(null);
   const [destination, setDestination] = useState<SearchResult | null>(null);
@@ -78,6 +80,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
 
   // Simulation State
   const [driverInfo, setDriverInfo] = useState<any>(null);
+  const [noDriversFound, setNoDriversFound] = useState(false);
   const timerRefs = useRef<any[]>([]);
 
   useEffect(() => {
@@ -103,21 +106,27 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
     }
   }, [currentUser]);
 
-  // Calculate Price when points change
-  useEffect(() => {
-    if (pickup && destination) {
-      // Simple Haversine distance approximation for demo
+  function deg2rad(deg: number) {
+    return deg * (Math.PI/180);
+  }
+
+  function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
       const R = 6371; // Radius of the earth in km
-      const dLat = deg2rad(destination.lat - pickup.lat);
-      const dLon = deg2rad(destination.lon - pickup.lon);
+      const dLat = deg2rad(lat2 - lat1);
+      const dLon = deg2rad(lon2 - lon1);
       const a = 
         Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(deg2rad(pickup.lat)) * Math.cos(deg2rad(destination.lat)) * 
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
         Math.sin(dLon/2) * Math.sin(dLon/2); 
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
       const d = R * c; // Distance in km
-      
-      const dist = Math.max(d, 1); // Minimum 1km
+      return d;
+  }
+
+  // Calculate Price when points change
+  useEffect(() => {
+    if (pickup && destination) {
+      const dist = Math.max(calculateDistance(pickup.lat, pickup.lon, destination.lat, destination.lon), 1);
       setEstimatedDistance(dist.toFixed(1));
       
       // Calculate Price based on Admin Settings
@@ -125,10 +134,6 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
       setEstimatedPrice(Math.round(price / 50) * 50); // Round to nearest 50
     }
   }, [pickup, destination, settings]);
-
-  function deg2rad(deg: number) {
-    return deg * (Math.PI/180);
-  }
 
   const handleSelectLocation = (loc: SearchResult, type: 'pickup' | 'dest') => {
     if (type === 'pickup') {
@@ -163,44 +168,81 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
   };
 
   const startRideRequest = () => {
+    if (!pickup) return;
+
     setRideState('SEARCHING');
+    setNoDriversFound(false);
     
-    // Simulate finding a driver
+    // Find closest driver
+    const availableDrivers = allUsers.filter(u => 
+      u.role === UserRole.DRIVER && 
+      u.approvalStatus === 'APPROVED' && 
+      !u.isBlocked &&
+      u.id !== currentUser?.id &&
+      u.currentLocation
+    );
+
+    const driversWithDistance = availableDrivers.map(driver => {
+      const dist = calculateDistance(
+        pickup.lat, 
+        pickup.lon, 
+        driver.currentLocation!.lat, 
+        driver.currentLocation!.lng
+      );
+      return { ...driver, distanceToPickup: dist };
+    });
+
+    // Sort by distance
+    driversWithDistance.sort((a, b) => a.distanceToPickup - b.distanceToPickup);
+    
+    const closestDriver = driversWithDistance.length > 0 ? driversWithDistance[0] : null;
+
+    // Simulate searching delay
     const t1 = setTimeout(() => {
-      setDriverInfo({
-        name: 'Emmanuel K.',
-        car: 'Toyota Camry (2021)',
-        plate: 'LND-842-AX',
-        rating: 4.9,
-        trips: 1420,
-        avatar: IMAGES.DRIVER_CARD
-      });
-      setRideState('ASSIGNED');
-      
-      // Simulate Arrival
-      const t2 = setTimeout(() => {
-        setRideState('IN_PROGRESS');
+      if (closestDriver && closestDriver.distanceToPickup < 50) { // Only assign if within 50km
+        setDriverInfo({
+          name: closestDriver.name,
+          car: 'Professional Driver',
+          plate: `ID-${closestDriver.id.substr(0, 4).toUpperCase()}`,
+          rating: closestDriver.rating,
+          trips: closestDriver.trips,
+          avatar: closestDriver.avatar,
+          timeAway: Math.max(Math.round((closestDriver.distanceToPickup / 40) * 60), 2) // Avg speed 40km/h, min 2 mins
+        });
+        setRideState('ASSIGNED');
         
-        // Simulate Completion
-        const t3 = setTimeout(() => {
-          setRideState('COMPLETED');
-          // Add to Global History
-          onRideComplete({
-            id: `t_${Math.random().toString(36).substr(2, 6)}`,
-            ownerId: currentUser?.id,
-            ownerName: currentUser?.name || 'Me',
-            driverName: 'Emmanuel K.',
-            location: `${pickup?.display_name.split(',')[0]} -> ${destination?.display_name.split(',')[0]}`,
-            status: 'COMPLETED',
-            date: new Date().toLocaleString(),
-            amount: estimatedPrice
-          });
-        }, 8000); // 8 seconds trip
-        timerRefs.current.push(t3);
-      }, 5000); // 5 seconds arrival
-      timerRefs.current.push(t2);
+        // Simulate Arrival (Time depends on distance in reality, simplified here)
+        const t2 = setTimeout(() => {
+          setRideState('IN_PROGRESS');
+          // Manual completion is now required by the user clicking "I have arrived"
+        }, 5000); // 5 seconds arrival
+        timerRefs.current.push(t2);
+      } else {
+        setNoDriversFound(true);
+        // Reset state after showing error
+        const tError = setTimeout(() => {
+           setRideState('IDLE');
+           setNoDriversFound(false);
+        }, 3000);
+        timerRefs.current.push(tError);
+      }
     }, 3000); // 3 seconds searching
     timerRefs.current.push(t1);
+  };
+
+  const handleArrivedAtDestination = () => {
+      setRideState('COMPLETED');
+      // Add to Global History
+      onRideComplete({
+        id: `t_${Math.random().toString(36).substr(2, 6)}`,
+        ownerId: currentUser?.id,
+        ownerName: currentUser?.name || 'Me',
+        driverName: driverInfo.name,
+        location: `${pickup?.display_name.split(',')[0]} -> ${destination?.display_name.split(',')[0]}`,
+        status: 'COMPLETED',
+        date: new Date().toLocaleString(),
+        amount: estimatedPrice
+      });
   };
 
   const resetRide = () => {
@@ -209,6 +251,17 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
     setPickup(null);
     setDestination(null);
     setDriverInfo(null);
+    setNoDriversFound(false);
+  };
+
+  const copyToClipboard = async (text: string, label: string) => {
+    await CapacitorService.triggerHaptic();
+    try {
+        await navigator.clipboard.writeText(text);
+        alert(`${label} copied to clipboard!`);
+    } catch (err) {
+        console.error('Failed to copy', err);
+    }
   };
 
   const openGoogleMaps = () => {
@@ -297,14 +350,29 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
   const markers: any[] = [];
   if (pickup) markers.push({ id: 'pickup', position: [pickup.lat, pickup.lon], title: 'Pickup', icon: 'pickup' });
   if (destination) markers.push({ id: 'dest', position: [destination.lat, destination.lon], title: 'Destination', icon: 'destination' });
+  
+  // Show assigned driver
   if (driverInfo && (rideState === 'ASSIGNED' || rideState === 'IN_PROGRESS')) {
-     // Simulate driver position near pickup
      markers.push({ 
        id: 'driver', 
-       position: [pickup!.lat + 0.002, pickup!.lon + 0.002], 
+       position: [pickup!.lat + 0.002, pickup!.lon + 0.002], // Simulated pos
        title: driverInfo.name, 
        icon: 'taxi' 
      });
+  }
+
+  // Show available drivers when idle
+  if (rideState === 'IDLE' && allUsers.length > 0) {
+    allUsers.forEach(u => {
+      if (u.role === UserRole.DRIVER && u.approvalStatus === 'APPROVED' && u.currentLocation && u.id !== currentUser?.id) {
+         markers.push({
+            id: `available-${u.id}`,
+            position: [u.currentLocation.lat, u.currentLocation.lng],
+            title: u.name,
+            icon: 'taxi'
+         });
+      }
+    });
   }
 
   return (
@@ -414,13 +482,25 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
 
          {rideState === 'SEARCHING' && (
             <div className="bg-surface-light dark:bg-surface-dark rounded-3xl p-8 shadow-2xl border border-slate-200 dark:border-slate-800 text-center animate-slide-up">
-               <div className="w-20 h-20 mx-auto bg-primary/10 rounded-full flex items-center justify-center mb-4 relative">
-                  <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
-                  <span className="material-symbols-outlined text-primary text-3xl">radar</span>
-               </div>
-               <h3 className="text-xl font-bold mb-1">Finding a Driver</h3>
-               <p className="text-slate-500">Connecting you with nearby professionals...</p>
-               <button onClick={resetRide} className="mt-6 text-slate-400 font-bold text-sm hover:text-slate-600">Cancel Request</button>
+               {!noDriversFound ? (
+                 <>
+                   <div className="w-20 h-20 mx-auto bg-primary/10 rounded-full flex items-center justify-center mb-4 relative">
+                      <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+                      <span className="material-symbols-outlined text-primary text-3xl">radar</span>
+                   </div>
+                   <h3 className="text-xl font-bold mb-1">Scanning Nearby</h3>
+                   <p className="text-slate-500">Locating the closest available professional...</p>
+                   <button onClick={resetRide} className="mt-6 text-slate-400 font-bold text-sm hover:text-slate-600">Cancel Request</button>
+                 </>
+               ) : (
+                 <div className="animate-fade-in">
+                    <div className="w-20 h-20 mx-auto bg-red-500/10 rounded-full flex items-center justify-center mb-4">
+                      <span className="material-symbols-outlined text-red-500 text-3xl">error_outline</span>
+                   </div>
+                   <h3 className="text-xl font-bold mb-1">No Drivers Nearby</h3>
+                   <p className="text-slate-500">All our drivers are currently busy or too far away. Please try again later.</p>
+                 </div>
+               )}
             </div>
          )}
 
@@ -433,11 +513,11 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
                        <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                      </span>
                      <span className="text-sm font-bold text-slate-900 dark:text-white">
-                        {rideState === 'ASSIGNED' ? 'Driver is on the way' : 'Trip in progress'}
+                        {rideState === 'ASSIGNED' ? 'Driver Found!' : 'Trip in progress'}
                      </span>
                   </div>
                   <span className="text-xs font-bold bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-500">
-                     {rideState === 'ASSIGNED' ? '5 mins' : `${estimatedDistance} km left`}
+                     {rideState === 'ASSIGNED' ? `${driverInfo.timeAway} mins away` : `Heading to Destination`}
                   </span>
                </div>
                
@@ -484,6 +564,16 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
                    Cancel Ride
                  </button>
                )}
+               
+               {rideState === 'IN_PROGRESS' && (
+                 <button 
+                   onClick={handleArrivedAtDestination}
+                   className="mt-4 w-full py-3 rounded-xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/25 hover:bg-green-700 transition-colors active:scale-95 flex items-center justify-center gap-2"
+                 >
+                   <span className="material-symbols-outlined">flag</span>
+                   I have arrived
+                 </button>
+               )}
             </div>
          )}
 
@@ -492,9 +582,58 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
                <div className="w-20 h-20 mx-auto bg-green-500 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-green-500/30">
                   <span className="material-symbols-outlined text-white text-4xl filled">check</span>
                </div>
-               <h3 className="text-2xl font-black mb-2">You've Arrived!</h3>
-               <p className="text-slate-500 mb-6">How was your ride with {driverInfo?.name}?</p>
+               <h3 className="text-2xl font-black mb-2">Ride Completed!</h3>
+               <p className="text-slate-500 mb-6">Please make payment to the company account below.</p>
                
+               <div className="bg-slate-50 dark:bg-black/20 rounded-xl p-4 mb-6 text-left relative overflow-hidden">
+                  <div className="flex justify-between items-center mb-4">
+                     <p className="text-xs font-bold text-slate-500 uppercase">Payment Details</p>
+                     <button 
+                        onClick={() => copyToClipboard(`Bank: Zenith Bank\nAccount Name: Bica Driver LTD\nAccount Number: 9090390581\nAmount: ${formatCurrency(estimatedPrice)}`, 'All details')}
+                        className="text-xs text-primary font-bold hover:underline"
+                     >
+                        Copy All
+                     </button>
+                  </div>
+                  
+                  <div className="space-y-3">
+                     <div className="flex justify-between items-center group">
+                        <span className="text-sm text-slate-500">Bank Name</span>
+                        <div className="flex items-center gap-2">
+                           <span className="text-sm font-bold text-slate-900 dark:text-white">Zenith Bank</span>
+                           <button onClick={() => copyToClipboard('Zenith Bank', 'Bank Name')} className="text-slate-300 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                              <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                           </button>
+                        </div>
+                     </div>
+
+                     <div className="flex justify-between items-center group">
+                        <span className="text-sm text-slate-500">Account Name</span>
+                        <div className="flex items-center gap-2">
+                           <span className="text-sm font-bold text-slate-900 dark:text-white">Bica Driver LTD</span>
+                           <button onClick={() => copyToClipboard('Bica Driver LTD', 'Account Name')} className="text-slate-300 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                              <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                           </button>
+                        </div>
+                     </div>
+
+                     <div className="flex justify-between items-center bg-white dark:bg-input-dark p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <span className="text-sm text-slate-500">Account Number</span>
+                        <div className="flex items-center gap-2">
+                           <span className="text-xl font-black text-primary tracking-widest">9090390581</span>
+                           <button onClick={() => copyToClipboard('9090390581', 'Account Number')} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-primary hover:bg-primary/10 transition-colors">
+                             <span className="material-symbols-outlined text-sm">content_copy</span>
+                           </button>
+                        </div>
+                     </div>
+                     
+                     <div className="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-3 mt-1">
+                        <span className="text-sm font-medium text-slate-500">Amount Due</span>
+                        <span className="text-xl font-black text-slate-900 dark:text-white">{formatCurrency(estimatedPrice)}</span>
+                     </div>
+                  </div>
+               </div>
+
                <div className="flex justify-center gap-2 mb-6">
                   {[1,2,3,4,5].map(star => (
                      <button key={star} className="text-slate-300 hover:text-yellow-400 transition-colors">
@@ -503,22 +642,11 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
                   ))}
                </div>
 
-               <div className="bg-slate-50 dark:bg-black/20 rounded-xl p-4 mb-6">
-                  <div className="flex justify-between items-center mb-2">
-                     <span className="text-sm font-medium text-slate-500">Trip Fare</span>
-                     <span className="text-sm font-bold">{formatCurrency(estimatedPrice)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-green-500">
-                     <span className="text-sm font-medium">Paid via Wallet</span>
-                     <span className="material-symbols-outlined text-sm filled">check_circle</span>
-                  </div>
-               </div>
-
                <button 
                  onClick={resetRide}
                  className="w-full h-14 bg-primary text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-all"
                >
-                 Close
+                 I have made payment
                </button>
             </div>
          )}

@@ -27,7 +27,8 @@ const MOCK_USERS: UserProfile[] = [
     gender: "Male",
     nationality: "American",
     age: "34",
-    isBlocked: false
+    isBlocked: false,
+    currentLocation: { lat: 6.4281, lng: 3.4219 } // Victoria Island
   },
   {
     id: '2',
@@ -44,7 +45,44 @@ const MOCK_USERS: UserProfile[] = [
     transmission: 'Both',
     age: "28",
     nin: "12345678901",
-    isBlocked: false
+    isBlocked: false,
+    currentLocation: { lat: 6.4478, lng: 3.4737 } // Lekki Phase 1
+  },
+  {
+    id: '3',
+    name: "Michael Obi",
+    email: "mike.obi@bicadriver.com",
+    phone: "+234 802 333 4444",
+    role: UserRole.DRIVER,
+    rating: 4.9,
+    trips: 890,
+    avatar: "https://images.unsplash.com/photo-1531384441138-2736e62e0919?w=100&h=100&fit=crop",
+    approvalStatus: 'APPROVED',
+    backgroundCheckAccepted: true,
+    walletBalance: 12500,
+    transmission: 'Automatic',
+    age: "35",
+    nin: "9988776655",
+    isBlocked: false,
+    currentLocation: { lat: 6.6018, lng: 3.3515 } // Ikeja
+  },
+  {
+    id: '4',
+    name: "Sarah Connor",
+    email: "sarah.c@bicadriver.com",
+    phone: "+234 803 555 6666",
+    role: UserRole.DRIVER,
+    rating: 5.0,
+    trips: 42,
+    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&h=100&fit=crop",
+    approvalStatus: 'APPROVED',
+    backgroundCheckAccepted: true,
+    walletBalance: 2000,
+    transmission: 'Manual',
+    age: "29",
+    nin: "1122334455",
+    isBlocked: false,
+    currentLocation: { lat: 6.4549, lng: 3.4246 } // Ikoyi
   }
 ];
 
@@ -113,7 +151,8 @@ const App: React.FC = () => {
       nin: userData.nin,
       ninImage: userData.ninImage,
       transmission: userData.transmission,
-      isBlocked: false
+      isBlocked: false,
+      currentLocation: { lat: 6.4549, lng: 3.4246 } // Default location for new users
     };
 
     setAllUsers([...allUsers, newUser]);
@@ -240,7 +279,8 @@ const App: React.FC = () => {
       nationality: 'Global',
       age: '99',
       transmission: 'Automatic',
-      isBlocked: false
+      isBlocked: false,
+      currentLocation: { lat: 6.5244, lng: 3.3792 }
     };
     
     setCurrentUser(adminUser);
@@ -278,6 +318,7 @@ const App: React.FC = () => {
           onBack={handleLogout} 
           onRideComplete={handleAddTrip}
           currentUser={currentUser}
+          allUsers={allUsers}
         />;
       case AppScreen.DRIVER_DASHBOARD:
         return <DriverMainScreen 
