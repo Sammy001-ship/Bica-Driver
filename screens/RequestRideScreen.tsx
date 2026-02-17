@@ -23,7 +23,7 @@ interface RequestRideScreenProps {
   allUsers: UserProfile[];
 }
 
-type RideState = 'IDLE' | 'SEARCHING' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED';
+type RideState = 'IDLE' | 'SEARCHING' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'SCHEDULED';
 
 const DISCOVERY_CATEGORIES = [
   { label: 'Airports', icon: 'flight_takeoff', type: 'Airport' },
@@ -69,6 +69,11 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
   const [isSearchingDest, setIsSearchingDest] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Booking Type State
+  const [bookingType, setBookingType] = useState<'now' | 'schedule'>('now');
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+
   // Vehicle Details State
   const [showVehicleForm, setShowVehicleForm] = useState(false);
   const [vehicleData, setVehicleData] = useState({
@@ -90,6 +95,9 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
         setMapCenter([pos.coords.latitude, pos.coords.longitude]);
       }
     });
+    
+    // Set default schedule date to today
+    setScheduleDate(new Date().toISOString().split('T')[0]);
     
     // Cleanup timers on unmount
     return () => clearTimers();
@@ -154,6 +162,12 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
 
   const handleInitiateRequest = () => {
     CapacitorService.triggerHaptic();
+    if (bookingType === 'schedule') {
+        if (!scheduleDate || !scheduleTime) {
+            alert("Please select both date and time for your scheduled ride.");
+            return;
+        }
+    }
     setShowVehicleForm(true);
   };
 
@@ -164,7 +178,28 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
       return;
     }
     setShowVehicleForm(false);
-    startRideRequest();
+
+    if (bookingType === 'schedule') {
+        finalizeScheduledRide();
+    } else {
+        startRideRequest();
+    }
+  };
+
+  const finalizeScheduledRide = () => {
+    const formattedDate = `${scheduleDate} ${scheduleTime}`;
+    // Add to Global History as PENDING
+    onRideComplete({
+        id: `t_${Math.random().toString(36).substr(2, 6)}`,
+        ownerId: currentUser?.id,
+        ownerName: currentUser?.name || 'Me',
+        driverName: 'Pending Assignment',
+        location: `${pickup?.display_name.split(',')[0]} -> ${destination?.display_name.split(',')[0]}`,
+        status: 'PENDING',
+        date: formattedDate,
+        amount: estimatedPrice
+    });
+    setRideState('SCHEDULED');
   };
 
   const startRideRequest = () => {
@@ -252,6 +287,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
     setDestination(null);
     setDriverInfo(null);
     setNoDriversFound(false);
+    setBookingType('now');
   };
 
   const copyToClipboard = async (text: string, label: string) => {
@@ -420,6 +456,31 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
          {rideState === 'IDLE' && (
            <div className="bg-surface-light dark:bg-surface-dark rounded-3xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 animate-slide-up">
               <h2 className="text-lg font-bold mb-4">Plan your ride</h2>
+
+              {/* Booking Type Toggle */}
+              <div className="flex bg-slate-100 dark:bg-black/30 p-1 rounded-xl mb-6">
+                <button 
+                  onClick={() => { CapacitorService.triggerHaptic(); setBookingType('now'); }}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                    bookingType === 'now' 
+                      ? 'bg-white dark:bg-slate-700 shadow-md text-slate-900 dark:text-white' 
+                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                  }`}
+                >
+                  Ride Now
+                </button>
+                <button 
+                  onClick={() => { CapacitorService.triggerHaptic(); setBookingType('schedule'); }}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                    bookingType === 'schedule' 
+                      ? 'bg-white dark:bg-slate-700 shadow-md text-slate-900 dark:text-white' 
+                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                  }`}
+                >
+                  Schedule
+                  <span className="material-symbols-outlined text-sm">calendar_clock</span>
+                </button>
+              </div>
               
               <div className="flex flex-col gap-4 relative">
                  {/* Connecting Line */}
@@ -458,6 +519,30 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
 
               {pickup && destination && (
                 <div className="mt-6 animate-fade-in">
+                   {bookingType === 'schedule' && (
+                     <div className="grid grid-cols-2 gap-3 mb-4 animate-slide-up">
+                       <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-bold text-slate-500 uppercase ml-1">Date</label>
+                          <input 
+                            type="date" 
+                            min={new Date().toISOString().split('T')[0]}
+                            value={scheduleDate}
+                            onChange={(e) => setScheduleDate(e.target.value)}
+                            className="bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-slate-700 rounded-xl h-12 px-3 font-bold text-slate-900 dark:text-white text-sm"
+                          />
+                       </div>
+                       <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-bold text-slate-500 uppercase ml-1">Time</label>
+                          <input 
+                            type="time" 
+                            value={scheduleTime}
+                            onChange={(e) => setScheduleTime(e.target.value)}
+                            className="bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-slate-700 rounded-xl h-12 px-3 font-bold text-slate-900 dark:text-white text-sm"
+                          />
+                       </div>
+                     </div>
+                   )}
+
                    <div className="flex items-center justify-between mb-4 bg-primary/5 p-4 rounded-2xl border border-primary/10">
                       <div>
                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Estimated Fare</p>
@@ -468,12 +553,13 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
                          <p className="text-lg font-bold text-slate-900 dark:text-white">{estimatedDistance} km</p>
                       </div>
                    </div>
+                   
                    <button 
                      onClick={handleInitiateRequest}
                      className="w-full h-14 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                    >
-                     Request Driver
-                     <span className="material-symbols-outlined">arrow_forward</span>
+                     {bookingType === 'schedule' ? 'Schedule Ride' : 'Request Driver'}
+                     <span className="material-symbols-outlined">{bookingType === 'schedule' ? 'event_available' : 'arrow_forward'}</span>
                    </button>
                 </div>
               )}
@@ -501,6 +587,36 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
                    <p className="text-slate-500">All our drivers are currently busy or too far away. Please try again later.</p>
                  </div>
                )}
+            </div>
+         )}
+         
+         {rideState === 'SCHEDULED' && (
+            <div className="bg-surface-light dark:bg-surface-dark rounded-3xl p-8 shadow-2xl border border-slate-200 dark:border-slate-800 text-center animate-scale-in">
+               <div className="w-20 h-20 mx-auto bg-primary rounded-full flex items-center justify-center mb-4 shadow-lg shadow-primary/30">
+                  <span className="material-symbols-outlined text-white text-4xl filled">event_available</span>
+               </div>
+               <h3 className="text-2xl font-black mb-2">Ride Scheduled!</h3>
+               <p className="text-slate-500 mb-6 max-w-xs mx-auto">
+                 We've received your request. A driver will be assigned closer to your pickup time.
+               </p>
+               
+               <div className="bg-slate-50 dark:bg-black/20 rounded-xl p-4 mb-6 text-left">
+                  <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-3 mb-3">
+                     <span className="text-sm font-medium text-slate-500">Date</span>
+                     <span className="text-sm font-bold text-slate-900 dark:text-white">{new Date(scheduleDate).toDateString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                     <span className="text-sm font-medium text-slate-500">Time</span>
+                     <span className="text-sm font-bold text-slate-900 dark:text-white">{scheduleTime}</span>
+                  </div>
+               </div>
+
+               <button 
+                 onClick={resetRide}
+                 className="w-full h-14 bg-surface-light dark:bg-slate-800 text-slate-900 dark:text-white font-bold rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm active:scale-[0.98] transition-all"
+               >
+                 Done
+               </button>
             </div>
          )}
 
@@ -729,8 +845,8 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
                   type="submit"
                   className="w-full h-14 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/25 mt-2 active:scale-[0.98] transition-all flex items-center justify-center gap-2 hover:bg-green-700"
                 >
-                  Find Driver
-                  <span className="material-symbols-outlined">search</span>
+                  {bookingType === 'schedule' ? 'Schedule Now' : 'Find Driver'}
+                  <span className="material-symbols-outlined">{bookingType === 'schedule' ? 'event_available' : 'search'}</span>
                 </button>
              </form>
           </div>
