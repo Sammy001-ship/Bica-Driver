@@ -71,6 +71,7 @@ export interface SystemSettings {
 }
 
 export enum AppScreen {
+  LOADING = 'LOADING',
   WELCOME = 'WELCOME',
   SIGN_UP = 'SIGN_UP',
   LOGIN = 'LOGIN',

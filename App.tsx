@@ -11,6 +11,7 @@ import ProfileScreen from './screens/ProfileScreen';
 import AdminDashboardScreen from './screens/AdminDashboardScreen';
 import { IMAGES } from './constants';
 import { CapacitorService } from './services/CapacitorService';
+import LoadingScreen from './screens/LoadingScreen';
 
 const MOCK_USERS: UserProfile[] = [
   {
@@ -97,7 +98,7 @@ const INITIAL_PAYOUTS: Payout[] = [
 ];
 
 const App: React.FC = () => {
-  const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.WELCOME);
+  const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.LOADING);
   const [selectedSignupRole, setSelectedSignupRole] = useState<UserRole>(UserRole.UNSET);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [allUsers, setAllUsers] = useState<UserProfile[]>(MOCK_USERS);
@@ -303,6 +304,8 @@ const App: React.FC = () => {
 
   const renderScreen = () => {
     switch (currentScreen) {
+      case AppScreen.LOADING:
+        return <LoadingScreen onComplete={() => navigateTo(AppScreen.WELCOME)} />;
       case AppScreen.WELCOME:
         return <WelcomeScreen onCreateAccount={handleStart} onLogin={() => navigateTo(AppScreen.LOGIN)} />;
       case AppScreen.ROLE_SELECTION:
