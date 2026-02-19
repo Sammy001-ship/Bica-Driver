@@ -49,6 +49,10 @@ const LAGOS_LOCATIONS: SearchResult[] = [
   { id: 'lga_yaba', display_name: 'Yaba', description: 'Lagos Mainland', lat: 6.5163, lon: 3.3768, category: 'Education' },
 ];
 
+import { LocationService, LocationData } from '../services/LocationService';
+
+// ... existing interfaces ...
+
 const RequestRideScreen: React.FC<RequestRideScreenProps> = ({ 
   onOpenProfile, 
   onBack, 
@@ -57,8 +61,8 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
   currentUser,
   allUsers
 }) => {
-  const [pickup, setPickup] = useState<SearchResult | null>(null);
-  const [destination, setDestination] = useState<SearchResult | null>(null);
+  const [pickup, setPickup] = useState<LocationData | null>(null);
+  const [destination, setDestination] = useState<LocationData | null>(null);
   const [rideState, setRideState] = useState<RideState>('IDLE');
   const [mapCenter, setMapCenter] = useState<[number, number]>([6.4549, 3.4246]); // Lagos default
   const [estimatedPrice, setEstimatedPrice] = useState<number>(0);
@@ -87,6 +91,61 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
   const [driverInfo, setDriverInfo] = useState<any>(null);
   const [noDriversFound, setNoDriversFound] = useState(false);
   const timerRefs = useRef<any[]>([]);
+
+  const [isLocating, setIsLocating] = useState(false);
+
+  const handleUseMyLocation = async () => {
+    setIsLocating(true);
+    try {
+      const position = await CapacitorService.getCurrentLocation();
+      if (position) {
+        const { latitude, longitude, accuracy } = position.coords;
+        
+        try {
+          // Reverse geocode using our Lagos database
+          const location = LocationService.reverseGeocode(latitude, longitude);
+          
+          // Add accuracy info
+          const locationWithAccuracy = {
+            ...location,
+            accuracy: accuracy || 0
+          };
+          
+          setPickup(locationWithAccuracy);
+          setMapCenter([latitude, longitude]);
+          setIsSearchingPickup(false);
+          
+          // Show confirmation
+          alert(`Your live location is set: ${location.display_name}`);
+        } catch (err: any) {
+           alert(err.message || "Location outside Lagos boundaries.");
+        }
+      } else {
+        alert("Could not retrieve location. Please enter pickup manually.");
+      }
+    } catch (error) {
+      console.error("Location error:", error);
+      alert("Location permission denied. Please enter pickup manually.");
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  const handleMarkerDragEnd = (id: string, newPos: [number, number]) => {
+    if (id === 'pickup' && pickup) {
+      try {
+        const newLocation = LocationService.reverseGeocode(newPos[0], newPos[1]);
+        setPickup({
+          ...newLocation,
+          accuracy: 0 // Reset accuracy on manual move
+        });
+      } catch (e) {
+        // If dragged outside Lagos, snap back or alert
+        // For now, we just don't update or show alert
+        alert("Location outside Lagos State boundaries");
+      }
+    }
+  };
 
   useEffect(() => {
     // Get initial location
@@ -143,7 +202,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
     }
   }, [pickup, destination, settings]);
 
-  const handleSelectLocation = (loc: SearchResult, type: 'pickup' | 'dest') => {
+  const handleSelectLocation = (loc: LocationData, type: 'pickup' | 'dest') => {
     if (type === 'pickup') {
       setPickup(loc);
       setIsSearchingPickup(false);
@@ -311,10 +370,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(val).replace('NGN', '₦');
   };
 
-  const filteredLocations = LAGOS_LOCATIONS.filter(l => 
-    l.display_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    l.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredLocations = LocationService.search(searchQuery);
 
   const renderSearchModal = (type: 'pickup' | 'dest') => (
     <div className="fixed inset-0 z-50 bg-background-light dark:bg-background-dark flex flex-col animate-slide-up">
@@ -338,6 +394,31 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
       </div>
       
       <div className="flex-1 overflow-y-auto p-4">
+        {type === 'pickup' && searchQuery === '' && (
+           <div className="mb-6">
+              <button 
+                onClick={handleUseMyLocation}
+                disabled={isLocating}
+                className="w-full flex items-center gap-4 p-3 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors text-left mb-2"
+              >
+                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                  {isLocating ? (
+                    <span className="material-symbols-outlined text-primary animate-spin">refresh</span>
+                  ) : (
+                    <span className="material-symbols-outlined text-primary">my_location</span>
+                  )}
+                </div>
+                <div>
+                  <p className="font-bold text-primary text-sm">Use My Live Location</p>
+                  <p className="text-xs text-slate-500">Tap to set pickup to your current position</p>
+                </div>
+              </button>
+              <p className="text-[10px] text-slate-400 px-2 text-center">
+                 Location is only used for this ride request.
+              </p>
+           </div>
+        )}
+
         {searchQuery === '' && (
           <div className="mb-6">
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Categories</h3>
@@ -384,7 +465,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
   );
 
   const markers: any[] = [];
-  if (pickup) markers.push({ id: 'pickup', position: [pickup.lat, pickup.lon], title: 'Pickup', icon: 'pickup' });
+  if (pickup) markers.push({ id: 'pickup', position: [pickup.lat, pickup.lon], title: 'Pickup', icon: 'pickup', draggable: true });
   if (destination) markers.push({ id: 'dest', position: [destination.lat, destination.lon], title: 'Destination', icon: 'destination' });
   
   // Show assigned driver
@@ -423,6 +504,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
           center={mapCenter} 
           zoom={14} 
           markers={markers}
+          onMarkerDragEnd={handleMarkerDragEnd}
         />
         {/* Gradients for UI visibility */}
         <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/60 to-transparent pointer-events-none"></div>

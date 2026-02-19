@@ -16,6 +16,7 @@ interface InteractiveMapProps {
     title: string;
     icon?: 'user' | 'taxi' | 'destination' | 'pickup' | 'smart' | 'nearby';
     draggable?: boolean;
+    accuracy?: number;
   }>;
   onMarkerDragEnd?: (id: string, newPos: [number, number]) => void;
   onMapLoad?: (map: any) => void;
@@ -93,14 +94,23 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
     // 2. Add or update markers
     markers.forEach(marker => {
-      const { id, position, icon, draggable } = marker;
+      const { id, position, icon, draggable, accuracy } = marker;
       const latLng = position; // Leaflet uses [lat, lng]
 
       if (markersRef.current[id]) {
         // Update existing
         markersRef.current[id].setLatLng(latLng);
-        // Updating icon/draggable dynamically is complex in Leaflet, usually better to recreate if those change rarely
-        // For simple position updates, setLatLng is sufficient.
+        
+        // Update accuracy circle if it exists
+        if (markersRef.current[id + '_accuracy']) {
+           if (accuracy) {
+             markersRef.current[id + '_accuracy'].setLatLng(latLng);
+             markersRef.current[id + '_accuracy'].setRadius(accuracy);
+           } else {
+             markersRef.current[id + '_accuracy'].remove();
+             delete markersRef.current[id + '_accuracy'];
+           }
+        }
       } else {
         // Create Icon HTML
         let html = '';
@@ -149,6 +159,18 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         }
 
         markersRef.current[id] = newMarker;
+
+        // Add accuracy circle if provided
+        if (accuracy) {
+          const circle = window.L.circle(latLng, {
+            radius: accuracy,
+            color: '#f17606',
+            fillColor: '#f17606',
+            fillOpacity: 0.15,
+            weight: 1
+          }).addTo(map.current);
+          markersRef.current[id + '_accuracy'] = circle;
+        }
       }
     });
 
