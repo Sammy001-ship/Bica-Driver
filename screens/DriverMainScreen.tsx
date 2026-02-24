@@ -43,6 +43,10 @@ interface DriverMainScreenProps {
   onRideComplete: (trip: Trip) => void;
 }
 
+import { CameraSource, CameraDirection } from '@capacitor/camera';
+
+// ... existing imports
+
 const DriverMainScreen: React.FC<DriverMainScreenProps> = ({ 
   user, onOpenProfile, onBack, onUpdateEarnings, onRequestPayout, onRideComplete 
 }) => {
@@ -52,6 +56,9 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
   const [driverPos, setDriverPos] = useState<[number, number]>([6.4549, 3.3896]);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
+  const [showSelfieModal, setShowSelfieModal] = useState(false);
+  const [selfieImage, setSelfieImage] = useState<string | null>(null);
+  const [pendingRide, setPendingRide] = useState<RideRequest | null>(null);
   const lastRulesAccepted = useRef<number>(0);
   const trackingInterval = useRef<any>(null);
 
@@ -95,8 +102,36 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
 
   const handleAcceptRide = (ride: RideRequest) => {
     CapacitorService.triggerHaptic();
-    setActiveRide(ride);
-    setRidePhase('pickup');
+    setPendingRide(ride);
+    setSelfieImage(null);
+    setShowSelfieModal(true);
+  };
+
+  const handleTakeSelfie = async () => {
+    try {
+      const photo = await CapacitorService.takePhoto(CameraSource.Camera, CameraDirection.Front);
+      if (photo) {
+        setSelfieImage(photo);
+      }
+    } catch (e) {
+      console.error("Selfie failed", e);
+    }
+  };
+
+  const confirmSelfieAndRide = () => {
+    if (pendingRide && selfieImage) {
+      setActiveRide(pendingRide);
+      setRidePhase('pickup');
+      setShowSelfieModal(false);
+      setPendingRide(null);
+      setSelfieImage(null);
+    }
+  };
+
+  const cancelSelfie = () => {
+    setShowSelfieModal(false);
+    setPendingRide(null);
+    setSelfieImage(null);
   };
 
   const handleArrival = () => {
@@ -443,6 +478,35 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
            )}
         </div>
       </div>
+
+      {showSelfieModal && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-surface-dark border border-white/10 p-6 rounded-[2rem] w-full max-w-sm text-center flex flex-col">
+               <span className="material-symbols-outlined text-4xl text-white mb-3 bg-white/10 p-4 rounded-full mx-auto">face</span>
+               <h3 className="text-xl font-bold text-white mb-2">Verify Identity</h3>
+               <p className="text-slate-400 text-xs mb-6">Take a quick selfie to confirm you are the driver for this ride.</p>
+               
+               <div className="w-full aspect-square bg-black/50 rounded-2xl mb-6 overflow-hidden relative border border-white/10">
+                  {selfieImage ? (
+                    <img src={selfieImage} className="w-full h-full object-cover" alt="Selfie" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-500">
+                      <span className="material-symbols-outlined text-6xl">camera_front</span>
+                    </div>
+                  )}
+               </div>
+
+               <div className="flex gap-3">
+                  <button onClick={cancelSelfie} className="flex-1 py-3 rounded-xl bg-white/5 text-slate-300 font-bold hover:bg-white/10 transition-colors">Cancel</button>
+                  {selfieImage ? (
+                    <button onClick={confirmSelfieAndRide} className="flex-1 py-3 rounded-xl bg-green-500 text-white font-bold hover:bg-green-600 transition-colors shadow-lg shadow-green-500/20">Confirm</button>
+                  ) : (
+                    <button onClick={handleTakeSelfie} className="flex-1 py-3 rounded-xl bg-primary text-white font-bold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">Take Photo</button>
+                  )}
+               </div>
+            </div>
+         </div>
+      )}
 
       {showRulesModal && (
          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">

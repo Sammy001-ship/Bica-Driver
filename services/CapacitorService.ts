@@ -1,6 +1,6 @@
 
 import { Geolocation } from '@capacitor/geolocation';
-import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Camera, CameraResultType, CameraSource, CameraDirection } from '@capacitor/camera';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { StatusBar, Style } from '@capacitor/status-bar';
 
@@ -40,13 +40,14 @@ export const CapacitorService = {
     }
   },
 
-  async takePhoto(source: CameraSource = CameraSource.Prompt): Promise<string | null> {
+  async takePhoto(source: CameraSource = CameraSource.Prompt, direction: CameraDirection = CameraDirection.Rear): Promise<string | null> {
     try {
       const image = await Camera.getPhoto({
         quality: 90,
         allowEditing: true,
         resultType: CameraResultType.Base64,
-        source: source
+        source: source,
+        direction: direction
       });
       return `data:image/jpeg;base64,${image.base64String}`;
     } catch (e) {
@@ -56,7 +57,7 @@ export const CapacitorService = {
         input.type = 'file';
         input.accept = 'image/*';
         if (source === CameraSource.Camera) {
-          (input as any).capture = 'environment';
+          (input as any).capture = direction === CameraDirection.Front ? 'user' : 'environment';
         }
         
         input.onchange = (event: any) => {
