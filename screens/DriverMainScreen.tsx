@@ -51,6 +51,8 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
   const [ridePhase, setRidePhase] = useState<RidePhase>('pickup');
   const [driverPos, setDriverPos] = useState<[number, number]>([6.4549, 3.3896]);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const lastRulesAccepted = useRef<number>(0);
   const trackingInterval = useRef<any>(null);
 
   const approvalStatus = user?.approvalStatus || 'PENDING';
@@ -71,7 +73,24 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
   const toggleOnline = () => {
     if (activeRide) return;
     CapacitorService.triggerHaptic();
+    
+    if (!isOnline) {
+      // Going Online - Check if we need to show rules (every 6 hours)
+      const now = Date.now();
+      const sixHours = 6 * 60 * 60 * 1000;
+      if (now - lastRulesAccepted.current > sixHours) {
+        setShowRulesModal(true);
+        return;
+      }
+    }
+    
     setIsOnline(prev => !prev);
+  };
+
+  const handleAcceptRules = () => {
+    lastRulesAccepted.current = Date.now();
+    setShowRulesModal(false);
+    setIsOnline(true);
   };
 
   const handleAcceptRide = (ride: RideRequest) => {
@@ -424,6 +443,41 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
            )}
         </div>
       </div>
+
+      {showRulesModal && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-surface-dark border border-white/10 p-6 rounded-[2rem] w-full max-w-sm text-center max-h-[80vh] flex flex-col">
+               <span className="material-symbols-outlined text-4xl text-white mb-3 bg-white/10 p-4 rounded-full mx-auto">gavel</span>
+               <h3 className="text-xl font-bold text-white mb-2">Rules of Engagement</h3>
+               <p className="text-slate-400 text-xs mb-4">Please review and accept the driver guidelines before going online.</p>
+               
+               <div className="flex-1 overflow-y-auto text-left space-y-3 mb-6 pr-2 custom-scrollbar">
+                  {[
+                    "Dress clean and tidy (If possible apply cologne/perfume).",
+                    "Approach clients with courtesy and smile.",
+                    "Do a background check on the clients vehicle by asking questions about the vehicle.",
+                    "Remember to always use your seat belt while driving.",
+                    "Do not receive/make calls while driving.",
+                    "Do not text and drive.",
+                    "Obey all traffic rules.",
+                    "Drivers should keep to speed limits of all roads.",
+                    "Relax while driving no need to rush except in case of emergency.",
+                    "Be kind to other road user."
+                  ].map((rule, index) => (
+                    <div key={index} className="flex gap-3 text-sm text-slate-300 bg-white/5 p-3 rounded-xl border border-white/5">
+                      <span className="font-bold text-primary min-w-[20px]">{index + 1}.</span>
+                      <span>{rule}</span>
+                    </div>
+                  ))}
+               </div>
+
+               <div className="flex gap-3 mt-auto pt-4 border-t border-white/10">
+                  <button onClick={() => setShowRulesModal(false)} className="flex-1 py-3 rounded-xl bg-white/5 text-slate-300 font-bold hover:bg-white/10 transition-colors">Cancel</button>
+                  <button onClick={handleAcceptRules} className="flex-1 py-3 rounded-xl bg-primary text-white font-bold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">I Agree</button>
+               </div>
+            </div>
+         </div>
+      )}
 
       {showPayoutModal && (
          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
