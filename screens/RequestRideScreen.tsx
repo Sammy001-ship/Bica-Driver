@@ -253,7 +253,7 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
         ownerId: currentUser?.id,
         ownerName: currentUser?.name || 'Me',
         driverName: 'Pending Assignment',
-        location: `${pickup?.display_name.split(',')[0]} -> ${destination?.display_name.split(',')[0]}`,
+        location: `${pickup?.display_name?.split(',')[0] || 'Unknown'} -> ${destination?.display_name?.split(',')[0] || 'Unknown'}`,
         status: 'PENDING',
         date: formattedDate,
         amount: estimatedPrice
@@ -331,8 +331,8 @@ const RequestRideScreen: React.FC<RequestRideScreenProps> = ({
         id: `t_${Math.random().toString(36).substr(2, 6)}`,
         ownerId: currentUser?.id,
         ownerName: currentUser?.name || 'Me',
-        driverName: driverInfo.name,
-        location: `${pickup?.display_name.split(',')[0]} -> ${destination?.display_name.split(',')[0]}`,
+        driverName: driverInfo?.name || 'Unknown Driver',
+        location: `${pickup?.display_name?.split(',')[0] || 'Unknown'} -> ${destination?.display_name?.split(',')[0] || 'Unknown'}`,
         status: 'COMPLETED',
         date: new Date().toLocaleString(),
         amount: estimatedPrice

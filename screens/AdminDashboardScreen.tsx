@@ -118,7 +118,7 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                  <div className={`w-2 h-2 rounded-full ${trip.status === 'COMPLETED' ? 'bg-green-500' : 'bg-slate-400'}`}></div>
                  <div>
                     <p className="text-sm font-bold">{trip.location}</p>
-                    <p className="text-xs text-slate-500">{trip.date.split(' ')[1] || trip.date}</p>
+                    <p className="text-xs text-slate-500">{(trip.date || '').split(' ')[1] || trip.date}</p>
                  </div>
               </div>
               <span className="text-sm font-mono font-medium">{formatCurrency(trip.amount)}</span>
@@ -139,7 +139,7 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
            </button>
          ))}
       </div>
-      {drivers.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(driver => (
+      {drivers.filter(d => (d.name || '').toLowerCase().includes(searchTerm.toLowerCase())).map(driver => (
         <div 
           key={driver.id}
           onClick={() => setSelectedUser(driver)}
@@ -168,7 +168,7 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
 
   const renderOwners = () => (
     <div className="space-y-4 animate-slide-up">
-      {owners.filter(o => o.name.toLowerCase().includes(searchTerm.toLowerCase())).map(owner => (
+      {owners.filter(o => (o.name || '').toLowerCase().includes(searchTerm.toLowerCase())).map(owner => (
         <div key={owner.id} className="bg-surface-light dark:bg-surface-dark p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center gap-4">
           <img src={owner.avatar} className="w-12 h-12 rounded-full object-cover" alt="" />
           <div className="flex-1">
@@ -428,13 +428,63 @@ const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
               <div className="space-y-6">
                  {/* Only show Driver Specifics if driver */}
                  {selectedUser.role === UserRole.DRIVER && (
-                    <div className="grid grid-cols-2 gap-3">
-                       <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl">
-                          <p className="text-[10px] uppercase text-slate-500 font-bold">NIN Number</p>
-                          <p className="font-mono font-bold text-sm truncate">{selectedUser.nin || 'Not Provided'}</p>
-                       </div>
-                       {/* ... other driver fields */}
-                    </div>
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                         <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl">
+                            <p className="text-[10px] uppercase text-slate-500 font-bold">NIN Number</p>
+                            <p className="font-mono font-bold text-sm truncate">{selectedUser.nin || 'Not Provided'}</p>
+                         </div>
+                         <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl">
+                            <p className="text-[10px] uppercase text-slate-500 font-bold">Car Type</p>
+                            <p className="font-bold text-sm truncate">{selectedUser.carType || 'Not Provided'}</p>
+                         </div>
+                         <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl">
+                            <p className="text-[10px] uppercase text-slate-500 font-bold">Transmission</p>
+                            <p className="font-bold text-sm truncate">{selectedUser.transmission || 'Not Provided'}</p>
+                         </div>
+                         <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl">
+                            <p className="text-[10px] uppercase text-slate-500 font-bold">Age</p>
+                            <p className="font-bold text-sm truncate">{selectedUser.age || 'Not Provided'}</p>
+                         </div>
+                      </div>
+
+                      {/* Driver Documents Section */}
+                      <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                        <h4 className="text-sm font-bold uppercase tracking-wider text-slate-500">Uploaded Documents</h4>
+                        
+                        <div className="space-y-4">
+                          {/* License Image */}
+                          <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl">
+                            <p className="text-[10px] uppercase text-slate-500 font-bold mb-2">Driver's License</p>
+                            {selectedUser.licenseImage ? (
+                              <img src={selectedUser.licenseImage} alt="Driver License" className="w-full h-40 object-cover rounded-lg border border-slate-200 dark:border-slate-700" />
+                            ) : (
+                              <div className="w-full h-20 flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-400 text-xs font-medium">No License Uploaded</div>
+                            )}
+                          </div>
+
+                          {/* NIN Image */}
+                          <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl">
+                            <p className="text-[10px] uppercase text-slate-500 font-bold mb-2">NIN Document</p>
+                            {selectedUser.ninImage ? (
+                              <img src={selectedUser.ninImage} alt="NIN Document" className="w-full h-40 object-cover rounded-lg border border-slate-200 dark:border-slate-700" />
+                            ) : (
+                              <div className="w-full h-20 flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-400 text-xs font-medium">No NIN Uploaded</div>
+                            )}
+                          </div>
+
+                          {/* Selfie Image */}
+                          <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl">
+                            <p className="text-[10px] uppercase text-slate-500 font-bold mb-2">Verification Selfie</p>
+                            {selectedUser.selfieImage ? (
+                              <img src={selectedUser.selfieImage} alt="Selfie" className="w-full h-40 object-cover rounded-lg border border-slate-200 dark:border-slate-700" />
+                            ) : (
+                              <div className="w-full h-20 flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-400 text-xs font-medium">No Selfie Uploaded</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </>
                  )}
                  <div className="bg-slate-50 dark:bg-black/20 p-3 rounded-xl">
                     <p className="text-[10px] uppercase text-slate-500 font-bold">Email</p>

@@ -150,7 +150,7 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
     CapacitorService.triggerHaptic();
     
     // Parse the price (strip commas)
-    const tripPrice = parseInt(activeRide.price.replace(/,/g, ''), 10);
+    const tripPrice = parseInt((activeRide.price || '0').replace(/,/g, ''), 10);
     onUpdateEarnings(tripPrice);
     
     // Report to Admin Dashboard History
@@ -162,7 +162,7 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
       date: new Date().toLocaleString(),
       amount: tripPrice,
       status: 'COMPLETED',
-      location: `${activeRide.pickup.split(',')[0]} -> ${activeRide.destination.split(',')[0]}`
+      location: `${activeRide?.pickup?.split(',')[0] || 'Unknown'} -> ${activeRide?.destination?.split(',')[0] || 'Unknown'}`
     };
     onRideComplete(newTrip);
     

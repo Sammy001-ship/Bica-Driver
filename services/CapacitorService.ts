@@ -5,13 +5,13 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { StatusBar, Style } from '@capacitor/status-bar';
 
 export const CapacitorService = {
-  async getCurrentLocation() {
+  async getCurrentLocation(): Promise<any> {
     try {
       const coordinates = await Geolocation.getCurrentPosition();
       return coordinates;
     } catch (e) {
       console.warn('Capacitor Geolocation failed, trying web fallback...', e);
-      return new Promise((resolve) => {
+      return new Promise<any>((resolve) => {
         if ("geolocation" in navigator) {
           navigator.geolocation.getCurrentPosition(
             (position) => {

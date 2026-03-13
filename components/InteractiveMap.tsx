@@ -45,6 +45,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
 
     try {
+      // Prevent "Map container is already initialized" error in Strict Mode
+      if ((mapContainer.current as any)._leaflet_id) {
+        (mapContainer.current as any)._leaflet_id = null;
+      }
+
       // Create Map
       map.current = window.L.map(mapContainer.current, {
         center: center,
@@ -110,6 +115,15 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
              markersRef.current[id + '_accuracy'].remove();
              delete markersRef.current[id + '_accuracy'];
            }
+        } else if (accuracy) {
+           const circle = window.L.circle(latLng, {
+             radius: accuracy,
+             color: '#f17606',
+             fillColor: '#f17606',
+             fillOpacity: 0.15,
+             weight: 1
+           }).addTo(map.current);
+           markersRef.current[id + '_accuracy'] = circle;
         }
       } else {
         // Create Icon HTML

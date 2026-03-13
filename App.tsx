@@ -102,7 +102,8 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('bicadriver_users');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       } catch (e) {
         console.error("Failed to parse users from local storage", e);
       }
@@ -114,7 +115,8 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('bicadriver_current_user');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
       } catch (e) {
         console.error("Failed to parse current user from local storage", e);
       }
@@ -127,8 +129,10 @@ const App: React.FC = () => {
     if (savedUser) {
         try {
             const user = JSON.parse(savedUser);
-            if (user.id === 'admin_preview') return AppScreen.ADMIN_DASHBOARD;
-            return user.role === UserRole.DRIVER ? AppScreen.DRIVER_DASHBOARD : AppScreen.MAIN_REQUEST;
+            if (user && typeof user === 'object') {
+              if (user.id === 'admin_preview') return AppScreen.ADMIN_DASHBOARD;
+              return user.role === UserRole.DRIVER ? AppScreen.DRIVER_DASHBOARD : AppScreen.MAIN_REQUEST;
+            }
         } catch (e) {}
     }
     return AppScreen.LOADING;
@@ -143,7 +147,7 @@ const App: React.FC = () => {
     baseFare: 1500,
     pricePerKm: 250,
     commission: 15,
-    autoApprove: false
+    autoApprove: true
   });
 
   useEffect(() => {
@@ -180,6 +184,7 @@ const App: React.FC = () => {
       name: userData.name || '',
       email: userData.email || '',
       phone: userData.phone || '',
+      password: userData.password,
       role: selectedSignupRole,
       rating: 5.0,
       trips: 0,
@@ -218,6 +223,7 @@ const App: React.FC = () => {
     }
 
     if (email.toLowerCase() === 'admin@bicadrive.app' && password === 'admin') {
+      setCurrentUser({ id: 'admin_preview', name: 'Admin', role: UserRole.ADMIN } as any);
       navigateTo(AppScreen.ADMIN_DASHBOARD);
       return;
     }
@@ -343,8 +349,8 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    if (currentUser?.id === 'admin_preview') {
-      setCurrentUser(null);
+    if (currentUser?.id === 'admin_preview' && currentScreen !== AppScreen.ADMIN_DASHBOARD) {
+      // If simulating a user, return to admin dashboard
       navigateTo(AppScreen.ADMIN_DASHBOARD);
       return;
     }
