@@ -147,18 +147,26 @@ const App: React.FC = () => {
     baseFare: 1500,
     pricePerKm: 250,
     commission: 15,
-    autoApprove: true
+    autoApprove: false
   });
 
   useEffect(() => {
-    localStorage.setItem('bicadriver_users', JSON.stringify(allUsers));
+    try {
+      localStorage.setItem('bicadriver_users', JSON.stringify(allUsers));
+    } catch (error) {
+      console.error("Failed to save users to local storage (possibly quota exceeded):", error);
+    }
   }, [allUsers]);
 
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('bicadriver_current_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('bicadriver_current_user');
+    try {
+      if (currentUser) {
+        localStorage.setItem('bicadriver_current_user', JSON.stringify(currentUser));
+      } else {
+        localStorage.removeItem('bicadriver_current_user');
+      }
+    } catch (error) {
+      console.error("Failed to save current user to local storage:", error);
     }
   }, [currentUser]);
 
@@ -193,7 +201,7 @@ const App: React.FC = () => {
       licenseImage: userData.licenseImage,
       selfieImage: userData.selfieImage,
       backgroundCheckAccepted: userData.backgroundCheckAccepted,
-      approvalStatus: systemSettings.autoApprove ? 'APPROVED' : (selectedSignupRole === UserRole.DRIVER ? 'PENDING' : 'APPROVED'),
+      approvalStatus: selectedSignupRole === UserRole.DRIVER ? (systemSettings.autoApprove ? 'APPROVED' : 'PENDING') : 'APPROVED',
       walletBalance: 0,
       gender: userData.gender,
       address: userData.address,

@@ -68,8 +68,12 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
   useEffect(() => {
     if (isOnline && approvalStatus === 'APPROVED') {
       const updateLocation = async () => {
-        const pos = await CapacitorService.getCurrentLocation();
-        if (pos) setDriverPos([pos.coords.latitude, pos.coords.longitude]);
+        try {
+          const pos = await CapacitorService.getCurrentLocation();
+          if (pos) setDriverPos([pos.coords.latitude, pos.coords.longitude]);
+        } catch (error) {
+          console.error("Location update failed:", error);
+        }
       };
       updateLocation();
       trackingInterval.current = setInterval(updateLocation, 10000);
