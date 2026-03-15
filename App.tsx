@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import localforage from 'localforage';
 import { AppScreen, UserRole, UserProfile, ApprovalStatus, Trip, Payout, SystemSettings } from './types';
 import WelcomeScreen from './screens/WelcomeScreen';
 import SignUpScreen from './screens/SignUpScreen';
@@ -99,48 +100,34 @@ const INITIAL_PAYOUTS: Payout[] = [
 ];
 
 const App: React.FC = () => {
-  const [allUsers, setAllUsers] = useState<UserProfile[]>(() => {
-    const saved = localStorage.getItem('bicadriver_users');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      } catch (e) {
-        console.error("Failed to parse users from local storage", e);
-      }
-    }
-    return MOCK_USERS;
-  });
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>(MOCK_USERS);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.LOADING);
 
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem('bicadriver_current_user');
-    if (saved) {
+  useEffect(() => {
+    const initializeApp = async () => {
       try {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') {
-          if (parsed.id === 'admin_preview') return null;
-          return parsed;
+        const savedUsers = await localforage.getItem<UserProfile[]>('bicadriver_users');
+        if (savedUsers && Array.isArray(savedUsers)) {
+          setAllUsers(savedUsers);
+        }
+
+        const savedUser = await localforage.getItem<UserProfile>('bicadriver_current_user');
+        if (savedUser && typeof savedUser === 'object') {
+          if (savedUser.id !== 'admin_preview') {
+            setCurrentUser(savedUser);
+            setCurrentScreen(savedUser.role === UserRole.DRIVER ? AppScreen.DRIVER_DASHBOARD : AppScreen.MAIN_REQUEST);
+          }
         }
       } catch (e) {
-        console.error("Failed to parse current user from local storage", e);
+        console.error("Failed to initialize app from localforage", e);
+      } finally {
+        setIsInitializing(false);
       }
-    }
-    return null;
-  });
-
-  const [currentScreen, setCurrentScreen] = useState<AppScreen>(() => {
-    const savedUser = localStorage.getItem('bicadriver_current_user');
-    if (savedUser) {
-        try {
-            const user = JSON.parse(savedUser);
-            if (user && typeof user === 'object') {
-              if (user.id === 'admin_preview') return AppScreen.LOADING;
-              return user.role === UserRole.DRIVER ? AppScreen.DRIVER_DASHBOARD : AppScreen.MAIN_REQUEST;
-            }
-        } catch (e) {}
-    }
-    return AppScreen.LOADING;
-  });
+    };
+    initializeApp();
+  }, []);
 
   const [selectedSignupRole, setSelectedSignupRole] = useState<UserRole>(UserRole.UNSET);
   
@@ -155,24 +142,26 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
+    if (isInitializing) return;
     try {
-      localStorage.setItem('bicadriver_users', JSON.stringify(allUsers));
+      localforage.setItem('bicadriver_users', allUsers);
     } catch (error) {
-      console.error("Failed to save users to local storage (possibly quota exceeded):", error);
+      console.error("Failed to save users to localforage:", error);
     }
-  }, [allUsers]);
+  }, [allUsers, isInitializing]);
 
   useEffect(() => {
+    if (isInitializing) return;
     try {
       if (currentUser) {
-        localStorage.setItem('bicadriver_current_user', JSON.stringify(currentUser));
+        localforage.setItem('bicadriver_current_user', currentUser);
       } else {
-        localStorage.removeItem('bicadriver_current_user');
+        localforage.removeItem('bicadriver_current_user');
       }
     } catch (error) {
-      console.error("Failed to save current user to local storage:", error);
+      console.error("Failed to save current user to localforage:", error);
     }
-  }, [currentUser]);
+  }, [currentUser, isInitializing]);
 
   useEffect(() => {
     CapacitorService.initStatusBar();
