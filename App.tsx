@@ -117,7 +117,10 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') return parsed;
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.id === 'admin_preview') return null;
+          return parsed;
+        }
       } catch (e) {
         console.error("Failed to parse current user from local storage", e);
       }
@@ -131,7 +134,7 @@ const App: React.FC = () => {
         try {
             const user = JSON.parse(savedUser);
             if (user && typeof user === 'object') {
-              if (user.id === 'admin_preview') return AppScreen.ADMIN_DASHBOARD;
+              if (user.id === 'admin_preview') return AppScreen.LOADING;
               return user.role === UserRole.DRIVER ? AppScreen.DRIVER_DASHBOARD : AppScreen.MAIN_REQUEST;
             }
         } catch (e) {}
