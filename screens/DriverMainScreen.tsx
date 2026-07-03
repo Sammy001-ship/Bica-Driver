@@ -63,7 +63,8 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
   const [showSelfieModal, setShowSelfieModal] = useState(false);
   const [selfieImage, setSelfieImage] = useState<string | null>(null);
   const [pendingRide, setPendingRide] = useState<DriverRideRequest | null>(null);
-  const lastRulesAccepted = useRef<number>(0);
+  const [rememberRulesAcceptance, setRememberRulesAcceptance] = useState(false);
+  
 
   const approvalStatus = user?.approvalStatus || 'PENDING';
   const totalEarnings = walletSummary?.currentBalance ?? user?.walletBalance ?? 0;
@@ -191,13 +192,18 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
 
     const goingOnline = !isOnline;
 
+    // Check persistent acceptance; if set, go online immediately, else show modal
     if (goingOnline) {
-      const now = Date.now();
-      const sixHours = 6 * 60 * 60 * 1000;
-      if (now - lastRulesAccepted.current > sixHours) {
-        setShowRulesModal(true);
-        return;
+      try {
+        if (localStorage.getItem('driverRulesAccepted') === 'true') {
+          enableOnline();
+          return;
+        }
+      } catch (e) {
+        // ignore storage errors
       }
+      setShowRulesModal(true);
+      return;
     }
 
     try {
@@ -213,7 +219,13 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
 
 
   const handleAcceptRules = async () => {
-    lastRulesAccepted.current = Date.now();
+    try {
+      if (rememberRulesAcceptance) {
+        localStorage.setItem('driverRulesAccepted', 'true');
+      }
+    } catch (e) {
+      // ignore storage errors
+    }
     setShowRulesModal(false);
     enableOnline();
   };
@@ -1004,9 +1016,21 @@ const DriverMainScreen: React.FC<DriverMainScreenProps> = ({
               ))}
             </div>
 
-            <div className="flex gap-3 mt-auto pt-4 border-t border-white/10">
-              <button onClick={() => setShowRulesModal(false)} className="flex-1 py-3 rounded-xl bg-white/5 text-slate-300 font-bold hover:bg-white/10 transition-colors">Cancel</button>
-              <button onClick={handleAcceptRules} className="flex-1 py-3 rounded-xl bg-primary text-white font-bold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">I Agree</button>
+            <div className="mt-4">
+              <label className="flex items-center gap-3 text-sm text-slate-300 mb-3">
+                <input
+                  type="checkbox"
+                  checked={rememberRulesAcceptance}
+                  onChange={(e) => setRememberRulesAcceptance(e.target.checked)}
+                  className="w-4 h-4 rounded bg-white/5 border-white/10"
+                />
+                <span>Don't show this again</span>
+              </label>
+
+              <div className="flex gap-3 mt-auto pt-2 border-t border-white/10">
+                <button onClick={() => setShowRulesModal(false)} className="flex-1 py-3 rounded-xl bg-white/5 text-slate-300 font-bold hover:bg-white/10 transition-colors">Cancel</button>
+                <button onClick={handleAcceptRules} className="flex-1 py-3 rounded-xl bg-primary text-white font-bold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">I Agree</button>
+              </div>
             </div>
           </div>
         </div>
